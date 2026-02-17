@@ -4,9 +4,11 @@ import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
+import ru.vova.airbnb.controller.dto.BookingStatisticsResponse;
 import ru.vova.airbnb.exception.BookingException;
 import ru.vova.airbnb.mapper.BookingMapper;
 import ru.vova.airbnb.repository.BookingRepository;
+import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +45,7 @@ public class BookingService {
                 request.getPropertyId(),
                 request.getCheckInDate(),
                 request.getCheckOutDate(),
-                Arrays.asList(BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
             throw new BookingException("Property is already booked for selected dates");
         }
 
@@ -156,9 +160,20 @@ public class BookingService {
         log.info("Admin forcing status change for booking: {} to {}", bookingId, newStatus);
 
         Booking booking = findBookingById(bookingId);
+        BookingStatus previousStatus = booking.getStatus();
+        validateAdminTransition(previousStatus, newStatus);
         booking.setStatus(newStatus);
+        if (newStatus != BookingStatus.AWAITING_PAYMENT) {
+            booking.setPaymentDeadline(null);
+        }
 
         Booking updatedBooking = bookingRepository.save(booking);
+        notificationService.notifyGuest(updatedBooking.getGuestId(),
+                String.format("Booking status was changed by admin from %s to %s.",
+                        previousStatus, updatedBooking.getStatus()));
+        notificationService.notifyHost(updatedBooking.getHostId(),
+                String.format("Booking status was changed by admin from %s to %s.",
+                        previousStatus, updatedBooking.getStatus()));
         return bookingMapper.toResponse(updatedBooking);
     }
 
@@ -248,8 +263,30 @@ public class BookingService {
                 .collect(Collectors.toList());
     }
 
-    public BookingResponse getBookingById(Long bookingId) {
-        return bookingMapper.toResponse(findBookingById(bookingId));
+    @PreAuthorize("hasAnyRole('GUEST', 'HOST', 'ADMIN')")
+    public BookingResponse getBookingById(Long bookingId, UserDetailsImpl currentUser) {
+        Booking booking = findBookingById(bookingId);
+        if (!isAdmin(currentUser)
+                && !booking.getGuestId().equals(currentUser.getId())
+                && !booking.getHostId().equals(currentUser.getId())) {
+            throw new BookingException("You don't have permission to view this booking");
+        }
+        return bookingMapper.toResponse(booking);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public BookingStatisticsResponse getBookingStatistics() {
+        Map<BookingStatus, Long> stats = new EnumMap<>(BookingStatus.class);
+        for (Object[] row : bookingRepository.countBookingsByStatus()) {
+            BookingStatus status = (BookingStatus) row[0];
+            Long count = (Long) row[1];
+            stats.put(status, count);
+        }
+
+        return BookingStatisticsResponse.builder()
+                .totalBookings(bookingRepository.count())
+                .bookingsByStatus(stats)
+                .build();
     }
 
     private Booking findBookingById(Long bookingId) {
@@ -283,5 +320,17 @@ public class BookingService {
                     String.format("Invalid status transition from %s to %s", current, target)
             );
         }
+    }
+
+    private void validateAdminTransition(BookingStatus current, BookingStatus target) {
+        if (target == BookingStatus.FORCED_COMPLETED || target == BookingStatus.CANCELLED_EXPIRED) {
+            return;
+        }
+        validateTransition(current, target);
+    }
+
+    private boolean isAdmin(UserDetailsImpl user) {
+        return user.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
     }
 }

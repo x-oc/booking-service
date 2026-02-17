@@ -29,11 +29,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
             "WHERE b.propertyId = :propertyId " +
             "AND b.status IN :statuses " +
-            "AND ((b.checkInDate BETWEEN :checkIn AND :checkOut) " +
-            "OR (b.checkOutDate BETWEEN :checkIn AND :checkOut) " +
-            "OR (:checkIn BETWEEN b.checkInDate AND b.checkOutDate))")
+            "AND (:checkIn < b.checkOutDate AND :checkOut > b.checkInDate)")
     boolean existsOverlappingBooking(@Param("propertyId") Long propertyId,
                                      @Param("checkIn") LocalDate checkIn,
                                      @Param("checkOut") LocalDate checkOut,
                                      @Param("statuses") List<BookingStatus> statuses);
+
+    @Query("SELECT b.status, COUNT(b) FROM Booking b GROUP BY b.status")
+    List<Object[]> countBookingsByStatus();
 }
