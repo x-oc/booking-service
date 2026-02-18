@@ -1,8 +1,10 @@
 package ru.vova.airbnb.controller.auth.dto;
 
 import lombok.Data;
+import ru.vova.airbnb.entity.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 @Data
@@ -22,4 +24,7 @@ public class RegisterRequest {
     private String lastName;
 
     private String phoneNumber;
+
+    @NotNull
+    private UserRole role;
 }

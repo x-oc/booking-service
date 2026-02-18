@@ -1,34 +1,37 @@
 BASE_URL=http://localhost:8080
 CONTENT_TYPE="application/json"
 
-curl -X POST ${BASE_URL}/api/auth/register/guest \
+curl -X POST ${BASE_URL}/api/auth/register \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -d '{
     "email": "guest@test.com",
     "password": "password123",
     "firstName": "Ivan",
     "lastName": "Petrov",
-    "phoneNumber": "+79001234567"
+    "phoneNumber": "+79001234567",
+    "role": "GUEST"
   }'
 
-curl -X POST ${BASE_URL}/api/auth/register/host \
+curl -X POST ${BASE_URL}/api/auth/register \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -d '{
     "email": "host@test.com",
     "password": "password123",
     "firstName": "Petr",
     "lastName": "Ivanov",
-    "phoneNumber": "+79007654321"
+    "phoneNumber": "+79007654321",
+    "role": "HOST"
   }'
 
-curl -X POST ${BASE_URL}/api/auth/register/admin \
+curl -X POST ${BASE_URL}/api/auth/register \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -d '{
     "email": "admin@test.com",
     "password": "password123",
     "firstName": "Admin",
     "lastName": "Adminov",
-    "phoneNumber": "+79005555555"
+    "phoneNumber": "+79005555555",
+    "role": "ADMIN"
   }'
 
 curl -X POST ${BASE_URL}/api/auth/login \
@@ -67,7 +70,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
     "propertyId": 1,
     "hostId": 2,
     "checkInDate": "2026-03-01",
-    "checkOutDate": "2026-03-10"
+    "checkOutDate": "2026-03-10",
+    "totalAmount": 10000.00
   }'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/confirm \
@@ -89,7 +93,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
     "propertyId": 1,
     "hostId": 2,
     "checkInDate": "2026-04-01",
-    "checkOutDate": "2026-04-05"
+    "checkOutDate": "2026-04-05",
+    "totalAmount": 5000.00
   }'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID2}/reject \
@@ -104,7 +109,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
     "propertyId": 1,
     "hostId": 2,
     "checkInDate": "2026-05-01",
-    "checkOutDate": "2026-05-10"
+    "checkOutDate": "2026-05-10",
+    "totalAmount": 12000.00
   }'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID3}/confirm \
@@ -123,7 +129,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
     "propertyId": 1,
     "hostId": 2,
     "checkInDate": "2026-02-01",
-    "checkOutDate": "2026-02-17"
+    "checkOutDate": "2026-02-17",
+    "totalAmount": 7000.00
   }'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID4}/confirm \
@@ -145,7 +152,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
     "propertyId": 1,
     "hostId": 2,
     "checkInDate": "2026-06-01",
-    "checkOutDate": "2026-06-10"
+    "checkOutDate": "2026-06-10",
+    "totalAmount": 15000.00
   }'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID5}/force-status \
@@ -154,5 +162,31 @@ curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID5}/force-status \
   -d '{
     "status": "FORCED_COMPLETED"
   }'
+
+# Пагинация гостевых бронирований
+curl -X GET "${BASE_URL}/api/v1/bookings/guest?page=0&size=5&sortBy=createdAt&direction=DESC" \
+  -H "Authorization: Bearer ${GUEST_TOKEN}"
+
+# Обновление и удаление до оплаты
+curl -X PUT ${BASE_URL}/api/v1/bookings/${BOOKING_ID} \
+  -H "Content-Type: ${CONTENT_TYPE}" \
+  -H "Authorization: Bearer ${GUEST_TOKEN}" \
+  -d '{
+    "propertyId": 1,
+    "hostId": 2,
+    "checkInDate": "2026-03-02",
+    "checkOutDate": "2026-03-11",
+    "totalAmount": 11000.00
+  }'
+
+curl -X DELETE ${BASE_URL}/api/v1/bookings/${BOOKING_ID} \
+  -H "Authorization: Bearer ${GUEST_TOKEN}"
+
+# Обращение к админу по оплаченной брони и обработка
+curl -X POST ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request \
+  -H "Authorization: Bearer ${GUEST_TOKEN}"
+
+curl -X POST ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request/process \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}"
 
 

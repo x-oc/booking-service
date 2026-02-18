@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 
@@ -49,4 +50,15 @@ public class Booking {
 
     @Column(nullable = false)
     private LocalDate checkOutDate;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalAmount;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal refundedAmount;
+
+    @Enumerated(EnumType.STRING)
+    private SupportRequestInitiator supportRequestInitiator;
+
+    private LocalDateTime supportRequestedAt;
 }

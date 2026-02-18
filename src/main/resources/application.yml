@@ -31,7 +31,7 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS}
 
 server:
-  port: 8080
+  port: 28800
 
 logging:
   level:

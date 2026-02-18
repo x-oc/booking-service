@@ -2,7 +2,6 @@ package ru.vova.airbnb.service;
 
 import ru.vova.airbnb.controller.auth.dto.*;
 import ru.vova.airbnb.entity.User;
-import ru.vova.airbnb.entity.UserRole;
 import ru.vova.airbnb.exception.BookingException;
 import ru.vova.airbnb.repository.UserRepository;
 import ru.vova.airbnb.security.jwt.JwtUtils;
@@ -45,7 +44,7 @@ public class AuthService {
     }
 
     @Transactional
-    public void registerUser(RegisterRequest registerRequest, String role) {
+    public void registerUser(RegisterRequest registerRequest) {
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
             throw new BookingException("Email already in use!");
         }
@@ -56,7 +55,7 @@ public class AuthService {
         user.setFirstName(registerRequest.getFirstName());
         user.setLastName(registerRequest.getLastName());
         user.setPhoneNumber(registerRequest.getPhoneNumber());
-        user.setRole(UserRole.valueOf(role));
+        user.setRole(registerRequest.getRole());
         user.setVerified(false); // Requires email verification
 
         userRepository.save(user);
