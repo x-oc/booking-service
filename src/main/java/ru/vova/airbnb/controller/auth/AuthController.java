@@ -1,7 +1,6 @@
 package ru.vova.airbnb.controller.auth;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import ru.vova.airbnb.controller.auth.dto.*;
 import ru.vova.airbnb.service.AuthService;
 import jakarta.validation.Valid;
@@ -27,36 +26,14 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/register/guest")
+    @PostMapping("/register")
     @Operation(
             tags = {"Auth"},
-            summary = "Register guest",
-            description = "Public endpoint. Registers a user with GUEST role."
+            summary = "Register user",
+            description = "Public endpoint. Registers a user with selected role (GUEST/HOST/ADMIN)."
     )
-    public ResponseEntity<MessageResponse> registerGuest(@Valid @RequestBody RegisterRequest registerRequest) {
-        authService.registerUser(registerRequest, "GUEST");
+    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
+        authService.registerUser(registerRequest);
         return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
-    }
-
-    @PostMapping("/register/host")
-    @Operation(
-            tags = {"Auth"},
-            summary = "Register host",
-            description = "Public endpoint. Registers a user with HOST role."
-    )
-    public ResponseEntity<MessageResponse> registerHost(@Valid @RequestBody RegisterRequest registerRequest) {
-        authService.registerUser(registerRequest, "HOST");
-        return ResponseEntity.ok(new MessageResponse("Host registered successfully!"));
-    }
-
-    @PostMapping("/register/admin")
-    @Operation(
-            tags = {"Auth"},
-            summary = "Register admin",
-            description = "Public endpoint. Registers a user with ADMIN role."
-    )
-    public ResponseEntity<MessageResponse> registerAdmin(@Valid @RequestBody RegisterRequest registerRequest) {
-        authService.registerUser(registerRequest, "ADMIN");
-        return ResponseEntity.ok(new MessageResponse("Admin registered successfully!"));
     }
 }

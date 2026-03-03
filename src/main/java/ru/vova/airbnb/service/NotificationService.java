@@ -17,4 +17,9 @@ public class NotificationService {
         log.info("Notification to guest {}: {}", guestId, message);
         // some actual notification logic
     }
+
+    public void notifyAdmin(String message) {
+        log.info("Notification to admins: {}", message);
+        // some actual notification logic
+    }
 }

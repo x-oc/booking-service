@@ -2,6 +2,8 @@ package ru.vova.airbnb.repository;
 
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,6 +28,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByGuestId(Long guestId);
 
+    Page<Booking> findByGuestId(Long guestId, Pageable pageable);
+
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
             "WHERE b.propertyId = :propertyId " +
             "AND b.status IN :statuses " +
@@ -35,6 +39,15 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                      @Param("checkOut") LocalDate checkOut,
                                      @Param("statuses") List<BookingStatus> statuses);
 
-    @Query("SELECT b.status, COUNT(b) FROM Booking b GROUP BY b.status")
-    List<Object[]> countBookingsByStatus();
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
+            "WHERE b.id <> :bookingId " +
+            "AND b.propertyId = :propertyId " +
+            "AND b.status IN :statuses " +
+            "AND (:checkIn < b.checkOutDate AND :checkOut > b.checkInDate)")
+    boolean existsOverlappingBookingExcludingId(@Param("bookingId") Long bookingId,
+                                                @Param("propertyId") Long propertyId,
+                                                @Param("checkIn") LocalDate checkIn,
+                                                @Param("checkOut") LocalDate checkOut,
+                                                @Param("statuses") List<BookingStatus> statuses);
+
 }

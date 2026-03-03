@@ -3,12 +3,12 @@ package ru.vova.airbnb.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
-import ru.vova.airbnb.controller.dto.BookingStatisticsResponse;
 import ru.vova.airbnb.controller.dto.StatusUpdateRequest;
 import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import ru.vova.airbnb.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +35,33 @@ public class BookingController {
 
         BookingResponse response = bookingService.createBooking(request, currentUser.getId());
         return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(
+            tags = {"Guest"},
+            summary = "Update booking request",
+            description = "Role: GUEST. Updates own booking before payment."
+    )
+    public ResponseEntity<BookingResponse> updateBooking(
+            @PathVariable Long id,
+            @Valid @RequestBody BookingRequest request,
+            @AuthenticationPrincipal UserDetailsImpl currentUser) {
+        BookingResponse response = bookingService.updateBooking(id, request, currentUser.getId());
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(
+            tags = {"Guest"},
+            summary = "Delete booking request",
+            description = "Role: GUEST. Deletes own booking before payment."
+    )
+    public ResponseEntity<Void> deleteBooking(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl currentUser) {
+        bookingService.deleteBooking(id, currentUser.getId());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/pay")
@@ -110,13 +137,47 @@ public class BookingController {
     @Operation(
             tags = {"Guest"},
             summary = "Get guest bookings",
-            description = "Role: GUEST. Returns bookings where current user is guest."
+            description = "Role: GUEST. Returns paginated bookings where current user is guest."
     )
-    public ResponseEntity<List<BookingResponse>> getGuestBookings(
+    public ResponseEntity<Page<BookingResponse>> getGuestBookings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String direction,
             @AuthenticationPrincipal UserDetailsImpl currentUser) {
 
-        List<BookingResponse> bookings = bookingService.getGuestBookings(currentUser.getId());
+        Page<BookingResponse> bookings = bookingService.getGuestBookings(
+                currentUser.getId(),
+                page,
+                size,
+                sortBy,
+                direction
+        );
         return ResponseEntity.ok(bookings);
+    }
+
+    @PostMapping("/{id}/support-request")
+    @Operation(
+            tags = {"Guest", "Host"},
+            summary = "Request admin support for paid booking",
+            description = "Roles: GUEST/HOST. Creates support request for paid booking."
+    )
+    public ResponseEntity<BookingResponse> requestSupport(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl currentUser) {
+        BookingResponse response = bookingService.requestSupportForPaidBooking(id, currentUser);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/support-request/process")
+    @Operation(
+            tags = {"Admin"},
+            summary = "Process support request",
+            description = "Role: ADMIN. Cancels booking and refunds 50% or 100% depending on request initiator."
+    )
+    public ResponseEntity<BookingResponse> processSupportRequest(@PathVariable Long id) {
+        BookingResponse response = bookingService.processSupportRequest(id);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
@@ -130,15 +191,5 @@ public class BookingController {
             @AuthenticationPrincipal UserDetailsImpl currentUser) {
         BookingResponse response = bookingService.getBookingById(id, currentUser);
         return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/admin/statistics")
-    @Operation(
-            tags = {"Admin"},
-            summary = "Get booking statistics",
-            description = "Role: ADMIN. Returns aggregated statistics by booking status."
-    )
-    public ResponseEntity<BookingStatisticsResponse> getBookingStatistics() {
-        return ResponseEntity.ok(bookingService.getBookingStatistics());
     }
 }

@@ -18,6 +18,9 @@ public interface BookingMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "paymentDeadline", ignore = true)
+    @Mapping(target = "refundedAmount", ignore = true)
+    @Mapping(target = "supportRequestInitiator", ignore = true)
+    @Mapping(target = "supportRequestedAt", ignore = true)
     Booking toEntity(BookingRequest request);
 
     BookingResponse toResponse(Booking booking);

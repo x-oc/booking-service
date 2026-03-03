@@ -3,6 +3,9 @@ package ru.vova.airbnb.controller.dto;
 import lombok.Data;
 import lombok.Builder;
 import ru.vova.airbnb.entity.BookingStatus;
+import ru.vova.airbnb.entity.SupportRequestInitiator;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 
@@ -18,4 +21,8 @@ public class BookingResponse {
     private LocalDateTime paymentDeadline;
     private LocalDate checkInDate;
     private LocalDate checkOutDate;
+    private BigDecimal totalAmount;
+    private BigDecimal refundedAmount;
+    private SupportRequestInitiator supportRequestInitiator;
+    private LocalDateTime supportRequestedAt;
 }
