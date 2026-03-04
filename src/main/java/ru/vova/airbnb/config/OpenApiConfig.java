@@ -14,7 +14,8 @@ import org.springframework.context.annotation.Configuration;
         info = @Info(
                 title = "Airbnb Booking Service API",
                 version = "v1",
-                description = "REST API for booking workflow management",
+                description = "REST API for booking workflow management." +
+                "All timestamps in the API are in Moscow time (Europe/Moscow, UTC+3).",
                 contact = @Contact(name = "Booking Service")
         ),
         security = @SecurityRequirement(name = "bearerAuth"),

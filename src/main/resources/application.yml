@@ -6,7 +6,7 @@ spring:
     name: airbnb
 
   datasource:
-    url: ${DB_URL}
+    url: ${DB_URL}?serverTimezone=Europe/Moscow
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -16,6 +16,8 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
+        jdbc:
+          time_zone: Europe/Moscow
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: true
@@ -24,6 +26,9 @@ spring:
       charset: UTF-8
       enabled: true
       force: true
+
+  jackson:
+    time-zone: Europe/Moscow
 
 app:
   jwt:

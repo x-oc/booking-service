@@ -1,2 +1,5 @@
 DROP TABLE bookings CASCADE;
 DROP TABLE users CASCADE;
+
+
+TRUNCATE bookings CASCADE;
