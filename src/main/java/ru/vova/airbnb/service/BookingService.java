@@ -4,10 +4,13 @@ import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
+import ru.vova.airbnb.entity.Property;
 import ru.vova.airbnb.entity.SupportRequestInitiator;
+import ru.vova.airbnb.entity.User;
 import ru.vova.airbnb.exception.BookingException;
 import ru.vova.airbnb.mapper.BookingMapper;
 import ru.vova.airbnb.repository.BookingRepository;
+import ru.vova.airbnb.repository.UserRepository;
 import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +29,6 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +36,8 @@ import java.util.stream.Collectors;
 public class BookingService {
 
     private final BookingRepository bookingRepository;
+    private final UserRepository userRepository;
+    private final PropertyService propertyService;
     private final BookingMapper bookingMapper;
     private final NotificationService notificationService;
     private final Random random = new Random();
@@ -45,16 +49,21 @@ public class BookingService {
 
         validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
+        Property property = propertyService.lockPropertyForUpdate(request.getPropertyId());
+        validatePropertyActive(property);
+        validateHostOwnsProperty(property, request.getHostId());
+
         if (bookingRepository.existsOverlappingBooking(
                 request.getPropertyId(),
                 request.getCheckInDate(),
                 request.getCheckOutDate(),
-                Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
             throw new BookingException("Property is already booked for selected dates");
         }
 
         Booking booking = bookingMapper.toEntity(request);
         booking.setGuestId(guestId);
+        booking.setHostId(property.getHostId());
         booking.setStatus(BookingStatus.CREATED);
         booking.setRefundedAmount(BigDecimal.ZERO);
         booking.setSupportRequestInitiator(null);
@@ -80,17 +89,25 @@ public class BookingService {
         }
         validateMutableBeforePayment(booking.getStatus());
 
+        Property lockedTargetProperty = lockPropertiesForUpdate(booking.getPropertyId(), request.getPropertyId())
+                .stream()
+                .filter(property -> property.getId().equals(request.getPropertyId()))
+                .findFirst()
+                .orElseThrow(() -> new BookingException("Property not found with id: " + request.getPropertyId()));
+        validatePropertyActive(lockedTargetProperty);
+        validateHostOwnsProperty(lockedTargetProperty, request.getHostId());
+
         if (bookingRepository.existsOverlappingBookingExcludingId(
                 bookingId,
                 request.getPropertyId(),
                 request.getCheckInDate(),
                 request.getCheckOutDate(),
-                Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
             throw new BookingException("Property is already booked for selected dates");
         }
 
         booking.setPropertyId(request.getPropertyId());
-        booking.setHostId(request.getHostId());
+        booking.setHostId(lockedTargetProperty.getHostId());
         booking.setCheckInDate(request.getCheckInDate());
         booking.setCheckOutDate(request.getCheckOutDate());
         booking.setTotalAmount(request.getTotalAmount());
@@ -128,9 +145,19 @@ public class BookingService {
         log.info("Host {} confirming booking: {}", hostId, bookingId);
 
         Booking booking = findBookingById(bookingId);
+        propertyService.lockPropertyForUpdate(booking.getPropertyId());
 
         if (!booking.getHostId().equals(hostId)) {
             throw new BookingException("You don't have permission to confirm this booking");
+        }
+
+        if (bookingRepository.existsOverlappingBookingExcludingId(
+                booking.getId(),
+                booking.getPropertyId(),
+                booking.getCheckInDate(),
+                booking.getCheckOutDate(),
+                Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+            throw new BookingException("Property is already booked for selected dates");
         }
 
         validateTransition(booking.getStatus(), BookingStatus.AWAITING_PAYMENT);
@@ -382,25 +409,43 @@ public class BookingService {
         }
     }
 
-    @PreAuthorize("hasAnyRole('HOST', 'ADMIN')")
-    public List<BookingResponse> getHostBookings(Long hostId) {
-        return bookingRepository.findByHostId(hostId)
-                .stream()
-                .map(bookingMapper::toResponse)
-                .collect(Collectors.toList());
+    @PreAuthorize("hasRole('HOST')")
+    public Page<BookingResponse> getHostBookings(Long guestId,
+                                                 String guestEmail,
+                                                 LocalDate date,
+                                                 BookingStatus status,
+                                                 int page,
+                                                 int size,
+                                                 String sortBy,
+                                                 String direction,
+                                                 UserDetailsImpl currentUser) {
+        Long effectiveHostId = currentUser.getId();
+
+        Long effectiveGuestId = resolveFilterUserId(guestId, guestEmail, "Guest");
+        Pageable pageable = buildPageable(page, size, sortBy, direction);
+        String statusStr = status != null ? status.name() : null;
+        String dateStr = date != null ? date.toString() : null;
+        return bookingRepository.findHostBookingsWithFilters(effectiveHostId, effectiveGuestId, dateStr, statusStr, pageable)
+                .map(bookingMapper::toResponse);
     }
 
-    @PreAuthorize("hasAnyRole('GUEST', 'ADMIN')")
-    public Page<BookingResponse> getGuestBookings(Long guestId, int page, int size, String sortBy, String direction) {
-        Sort.Direction sortDirection;
-        try {
-            sortDirection = Sort.Direction.fromString(direction);
-        } catch (IllegalArgumentException ex) {
-            throw new BookingException("Invalid sort direction. Use ASC or DESC.");
-        }
+    @PreAuthorize("hasRole('GUEST')")
+    public Page<BookingResponse> getGuestBookings(Long hostId,
+                                                  String hostEmail,
+                                                  LocalDate date,
+                                                  BookingStatus status,
+                                                  int page,
+                                                  int size,
+                                                  String sortBy,
+                                                  String direction,
+                                                  UserDetailsImpl currentUser) {
+        Long effectiveGuestId = currentUser.getId();
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
-        return bookingRepository.findByGuestId(guestId, pageable)
+        Long effectiveHostId = resolveFilterUserId(hostId, hostEmail, "Host");
+        Pageable pageable = buildPageable(page, size, sortBy, direction);
+        String statusStr = status != null ? status.name() : null;
+        String dateStr = date != null ? date.toString() : null;
+        return bookingRepository.findGuestBookingsWithFilters(effectiveGuestId, effectiveHostId, dateStr, statusStr, pageable)
                 .map(bookingMapper::toResponse);
     }
 
@@ -486,5 +531,72 @@ public class BookingService {
     private boolean hasRole(UserDetailsImpl user, String role) {
         return user.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals(role));
+    }
+
+    private Pageable buildPageable(int page, int size, String sortBy, String direction) {
+        Sort.Direction sortDirection;
+        try {
+            sortDirection = Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException ex) {
+            throw new BookingException("Invalid sort direction. Use ASC or DESC.");
+        }
+        String dbColumnName = mapFieldToColumn(sortBy);
+        return PageRequest.of(page, size, Sort.by(sortDirection, dbColumnName));
+    }
+
+    private String mapFieldToColumn(String fieldName) {
+        return switch (fieldName) {
+            case "createdAt" -> "created_at";
+            case "updatedAt" -> "updated_at";
+            case "guestId" -> "guest_id";
+            case "hostId" -> "host_id";
+            case "propertyId" -> "property_id";
+            case "status" -> "status";
+            case "checkInDate" -> "check_in_date";
+            case "checkOutDate" -> "check_out_date";
+            case "paymentDeadline" -> "payment_deadline";
+            case "totalAmount" -> "total_amount";
+            case "refundedAmount" -> "refunded_amount";
+            case "supportRequestInitiator" -> "support_request_initiator";
+            case "supportRequestedAt" -> "support_requested_at";
+            default -> throw new BookingException("Unsupported sortBy field: " + fieldName);
+        };
+    }
+
+    private Long resolveFilterUserId(Long userId, String email, String roleLabel) {
+        if (email == null || email.isBlank()) {
+            return userId;
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BookingException(roleLabel + " with email not found: " + email));
+
+        if (userId != null && !userId.equals(user.getId())) {
+            throw new BookingException(roleLabel + " id and email refer to different users");
+        }
+        return user.getId();
+    }
+
+    private void validatePropertyActive(Property property) {
+        if (Boolean.FALSE.equals(property.getActive())) {
+            throw new BookingException("Property is inactive and cannot be booked");
+        }
+    }
+
+    private void validateHostOwnsProperty(Property property, Long hostIdFromRequest) {
+        if (!property.getHostId().equals(hostIdFromRequest)) {
+            throw new BookingException("Host id in request does not match property owner");
+        }
+    }
+
+    private List<Property> lockPropertiesForUpdate(Long firstPropertyId, Long secondPropertyId) {
+        if (firstPropertyId.equals(secondPropertyId)) {
+            return List.of(propertyService.lockPropertyForUpdate(firstPropertyId));
+        }
+        Long low = Math.min(firstPropertyId, secondPropertyId);
+        Long high = Math.max(firstPropertyId, secondPropertyId);
+        Property first = propertyService.lockPropertyForUpdate(low);
+        Property second = propertyService.lockPropertyForUpdate(high);
+        return List.of(first, second);
     }
 }

@@ -4,16 +4,18 @@ import io.swagger.v3.oas.annotations.Operation;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
 import ru.vova.airbnb.controller.dto.StatusUpdateRequest;
+import ru.vova.airbnb.entity.BookingStatus;
 import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import ru.vova.airbnb.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/bookings")
@@ -113,31 +115,57 @@ public class BookingController {
     @Operation(
             tags = {"Host"},
             summary = "Get host bookings",
-            description = "Role: HOST. Returns bookings where current user is host."
+            description = "Role: HOST. Returns paginated host bookings with optional filters."
     )
-    public List<BookingResponse> getHostBookings(
+    public Page<BookingResponse> getHostBookings(
+            @RequestParam(required = false) Long guestId,
+            @RequestParam(required = false) String guestEmail,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String direction,
             @AuthenticationPrincipal UserDetailsImpl currentUser) {
-        return bookingService.getHostBookings(currentUser.getId());
+        return bookingService.getHostBookings(
+                guestId,
+                guestEmail,
+                date,
+                status,
+                page,
+                size,
+                sortBy,
+                direction,
+                currentUser
+        );
     }
 
     @GetMapping("/guest")
     @Operation(
             tags = {"Guest"},
             summary = "Get guest bookings",
-            description = "Role: GUEST. Returns paginated bookings where current user is guest."
+            description = "Role: GUEST. Returns paginated guest bookings with optional filters."
     )
     public Page<BookingResponse> getGuestBookings(
+            @RequestParam(required = false) Long hostId,
+            @RequestParam(required = false) String hostEmail,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) BookingStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "DESC") String direction,
             @AuthenticationPrincipal UserDetailsImpl currentUser) {
         return bookingService.getGuestBookings(
-                currentUser.getId(),
+                hostId,
+                hostEmail,
+                date,
+                status,
                 page,
                 size,
                 sortBy,
-                direction
+                direction,
+                currentUser
         );
     }
 
