@@ -30,20 +30,29 @@ public class JwtUtils {
 
         return Jwts.builder()
                 .subject(userPrincipal.getId().toString())
+                .claim("email", userPrincipal.getEmail())
+                .claim("role", userPrincipal.getRole())
+                .claim("firstName", userPrincipal.getFirstName())
+                .claim("lastName", userPrincipal.getLastName())
+                .claim("enabled", userPrincipal.isEnabled())
+                .claim("verified", userPrincipal.isVerified())
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
                 .signWith(key())
                 .compact();
     }
 
-    public Long getUserIdFromJwtToken(String token) {
-        String userIdStr = Jwts.parser()
+    public Claims getClaimsFromJwtToken(String token) {
+        return Jwts.parser()
                 .verifyWith(key())
                 .build()
                 .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
-        return Long.parseLong(userIdStr);
+                .getPayload();
+    }
+
+    public UserDetailsImpl getUserDetailsFromJwtToken(String token) {
+        Claims claims = getClaimsFromJwtToken(token);
+        return UserDetailsImpl.fromClaims(claims);
     }
 
     public boolean validateJwtToken(String authToken) {

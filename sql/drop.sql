@@ -1,0 +1,2 @@
+DROP TABLE bookings CASCADE;
+DROP TABLE users CASCADE;

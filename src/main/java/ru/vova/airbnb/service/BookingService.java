@@ -43,10 +43,8 @@ public class BookingService {
     public BookingResponse createBooking(BookingRequest request, Long guestId) {
         log.info("Creating booking for guest: {}", guestId);
 
-        // Validate dates
         validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
-        // Check for overlapping bookings with PAID or ACTIVE status
         if (bookingRepository.existsOverlappingBooking(
                 request.getPropertyId(),
                 request.getCheckInDate(),

@@ -32,14 +32,13 @@ public class AuthService {
         String jwt = jwtUtils.generateJwtToken(authentication);
 
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        String role = userDetails.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
 
         return new JwtResponse(
                 jwt,
                 "Bearer",
                 userDetails.getId(),
                 userDetails.getEmail(),
-                role
+                userDetails.getRole()
         );
     }
 

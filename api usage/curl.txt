@@ -1,4 +1,4 @@
-BASE_URL=http://localhost:8080
+BASE_URL=http://localhost:28800
 CONTENT_TYPE="application/json"
 
 curl -X POST ${BASE_URL}/api/auth/register \
@@ -69,8 +69,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -d '{
     "propertyId": 1,
     "hostId": 2,
-    "checkInDate": "2026-03-01",
-    "checkOutDate": "2026-03-10",
+    "checkInDate": "2026-04-03",
+    "checkOutDate": "2026-04-10",
     "totalAmount": 10000.00
   }'
 
@@ -92,8 +92,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -d '{
     "propertyId": 1,
     "hostId": 2,
-    "checkInDate": "2026-04-01",
-    "checkOutDate": "2026-04-05",
+    "checkInDate": "2026-06-01",
+    "checkOutDate": "2026-06-05",
     "totalAmount": 5000.00
   }'
 

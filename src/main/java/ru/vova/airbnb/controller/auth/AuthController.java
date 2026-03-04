@@ -1,12 +1,17 @@
 package ru.vova.airbnb.controller.auth;
 
 import io.swagger.v3.oas.annotations.Operation;
-import ru.vova.airbnb.controller.auth.dto.*;
-import ru.vova.airbnb.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import ru.vova.airbnb.controller.auth.dto.JwtResponse;
+import ru.vova.airbnb.controller.auth.dto.LoginRequest;
+import ru.vova.airbnb.controller.auth.dto.MessageResponse;
+import ru.vova.airbnb.controller.auth.dto.RegisterRequest;
+import ru.vova.airbnb.service.AuthService;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -21,9 +26,8 @@ public class AuthController {
             summary = "Login",
             description = "Public endpoint. Authenticates user and returns JWT token."
     )
-    public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
-        JwtResponse response = authService.authenticateUser(loginRequest);
-        return ResponseEntity.ok(response);
+    public JwtResponse login(@Valid @RequestBody LoginRequest loginRequest) {
+        return authService.authenticateUser(loginRequest);
     }
 
     @PostMapping("/register")
@@ -32,8 +36,8 @@ public class AuthController {
             summary = "Register user",
             description = "Public endpoint. Registers a user with selected role (GUEST/HOST/ADMIN)."
     )
-    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
+    public MessageResponse register(@Valid @RequestBody RegisterRequest registerRequest) {
         authService.registerUser(registerRequest);
-        return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
+        return new MessageResponse("User registered successfully!");
     }
 }
