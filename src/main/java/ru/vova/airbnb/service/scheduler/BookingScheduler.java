@@ -19,13 +19,13 @@ public class BookingScheduler {
         bookingService.cancelExpiredPayments();
     }
 
-    @Scheduled(cron = "0 0 0 * * *") // Run at midnight every day
+    @Scheduled(cron = "0 0 0 * * *", zone = "Europe/Moscow") // Run at midnight every day
     public void checkStayCompletions() {
         log.info("Running stay completion check");
         bookingService.completeStays();
     }
 
-    @Scheduled(cron = "0 5 0 * * *") // Run at 00:05 every day
+    @Scheduled(cron = "0 5 0 * * *", zone = "Europe/Moscow") // Run at 00:05 every day
     public void activateBookings() {
         log.info("Running booking activation for today's check-ins");
         bookingService.activateDueBookings();

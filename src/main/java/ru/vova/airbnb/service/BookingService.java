@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -37,6 +38,7 @@ public class BookingService {
     private final BookingMapper bookingMapper;
     private final NotificationService notificationService;
     private final Random random = new Random();
+    private final Clock moscowClock;
 
     @Transactional
     @PreAuthorize("hasRole('GUEST')")
@@ -136,7 +138,7 @@ public class BookingService {
         validateTransition(booking.getStatus(), BookingStatus.AWAITING_PAYMENT);
 
         booking.setStatus(BookingStatus.AWAITING_PAYMENT);
-        booking.setPaymentDeadline(LocalDateTime.now().plusHours(24));
+        booking.setPaymentDeadline(LocalDateTime.now(moscowClock).plusHours(24));
 
         Booking updatedBooking = bookingRepository.save(booking);
 
@@ -183,7 +185,7 @@ public class BookingService {
 
         // Check if payment deadline hasn't expired
         if (booking.getPaymentDeadline() != null &&
-                LocalDateTime.now().isAfter(booking.getPaymentDeadline())) {
+                LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
             booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
             bookingRepository.save(booking);
             throw new BookingException("Payment deadline has expired");
@@ -210,7 +212,7 @@ public class BookingService {
         Booking updatedBooking = bookingRepository.save(booking);
 
         // Automatically activate if check-in date is today or in the past
-        if (!updatedBooking.getCheckInDate().isAfter(LocalDate.now())) {
+        if (!updatedBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
             activateBooking(updatedBooking);
         }
 
@@ -265,12 +267,12 @@ public class BookingService {
             throw new BookingException("Support request is already created for this booking");
         }
 
-        SupportRequestInitiator initiator = hasRole(currentUser, "ROLE_GUEST")
+        SupportRequestInitiator initiator = currentUser.getRole().equals("GUEST")
                 ? SupportRequestInitiator.GUEST
                 : SupportRequestInitiator.HOST;
 
         booking.setSupportRequestInitiator(initiator);
-        booking.setSupportRequestedAt(LocalDateTime.now());
+        booking.setSupportRequestedAt(LocalDateTime.now(moscowClock));
         Booking updatedBooking = bookingRepository.save(booking);
 
         notificationService.notifyAdmin(
@@ -319,7 +321,7 @@ public class BookingService {
         List<Booking> expiredBookings = bookingRepository
                 .findByStatusAndPaymentDeadlineBefore(
                         BookingStatus.AWAITING_PAYMENT,
-                        LocalDateTime.now()
+                        LocalDateTime.now(moscowClock)
                 );
 
         for (Booking booking : expiredBookings) {
@@ -344,7 +346,7 @@ public class BookingService {
         List<Booking> completedBookings = bookingRepository
                 .findByStatusAndCheckOutDateBefore(
                         BookingStatus.ACTIVE,
-                        LocalDate.now()
+                        LocalDate.now(moscowClock)
                 );
 
         for (Booking booking : completedBookings) {
@@ -370,7 +372,7 @@ public class BookingService {
         List<Booking> bookingsToActivate = bookingRepository
                 .findByStatusAndCheckInDateBeforeOrEqual(
                         BookingStatus.PAID,
-                        LocalDate.now()
+                        LocalDate.now(moscowClock)
                 );
 
         for (Booking booking : bookingsToActivate) {
@@ -425,7 +427,7 @@ public class BookingService {
             throw new BookingException("Check-out date must be after check-in date");
         }
 
-        if (checkIn.isBefore(LocalDate.now())) {
+        if (checkIn.isBefore(LocalDate.now(moscowClock))) {
             throw new BookingException("Check-in date cannot be in the past");
         }
     }
@@ -471,20 +473,16 @@ public class BookingService {
         if (booking.getStatus() != BookingStatus.PAID && booking.getStatus() != BookingStatus.ACTIVE) {
             throw new BookingException("Support request is available only for paid bookings");
         }
-        if (hasRole(currentUser, "ROLE_GUEST") && !booking.getGuestId().equals(currentUser.getId())) {
+        if (currentUser.getRole().equals("GUEST") && !booking.getGuestId().equals(currentUser.getId())) {
             throw new BookingException("You don't have permission to request support for this booking");
         }
-        if (hasRole(currentUser, "ROLE_HOST") && !booking.getHostId().equals(currentUser.getId())) {
+        if (currentUser.getRole().equals("HOST") && !booking.getHostId().equals(currentUser.getId())) {
             throw new BookingException("You don't have permission to request support for this booking");
         }
     }
 
     private boolean isAdmin(UserDetailsImpl user) {
-        return hasRole(user, "ROLE_ADMIN");
+        return user.getRole().equals("ADMIN");
     }
 
-    private boolean hasRole(UserDetailsImpl user, String role) {
-        return user.getAuthorities().stream()
-                .anyMatch(authority -> authority.getAuthority().equals(role));
-    }
 }
