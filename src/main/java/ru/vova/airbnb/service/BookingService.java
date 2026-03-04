@@ -1,7 +1,9 @@
 package ru.vova.airbnb.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
+import ru.vova.airbnb.events.BookingNotificationEvent;
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
 import ru.vova.airbnb.entity.Property;
@@ -40,7 +42,7 @@ public class BookingService {
     private final UserRepository userRepository;
     private final PropertyService propertyService;
     private final BookingMapper bookingMapper;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final Random random = new Random();
     private final Clock moscowClock;
 
@@ -72,9 +74,12 @@ public class BookingService {
         booking.setSupportRequestedAt(null);
 
         Booking savedBooking = bookingRepository.save(booking);
-
-        notificationService.notifyHost(savedBooking.getHostId(),
-                "New booking request received for property: " + savedBooking.getPropertyId());
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        savedBooking.getHostId(),
+                        "New booking request received for property: " + savedBooking.getPropertyId()
+                )
+        );
 
         return bookingMapper.toResponse(savedBooking);
     }
@@ -120,8 +125,12 @@ public class BookingService {
         booking.setSupportRequestedAt(null);
 
         Booking updatedBooking = bookingRepository.save(booking);
-        notificationService.notifyHost(updatedBooking.getHostId(),
-                "Booking request was updated by guest and requires your review again.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        updatedBooking.getHostId(),
+                        "Booking request was updated by guest and requires your review again."
+                )
+        );
         return bookingMapper.toResponse(updatedBooking);
     }
 
@@ -137,8 +146,12 @@ public class BookingService {
         validateMutableBeforePayment(booking.getStatus());
 
         bookingRepository.delete(booking);
-        notificationService.notifyHost(booking.getHostId(),
-                "Booking request was deleted by guest before payment.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        booking.getHostId(),
+                        "Booking request was deleted by guest before payment."
+                )
+        );
     }
 
     @Transactional
@@ -168,9 +181,12 @@ public class BookingService {
         booking.setPaymentDeadline(LocalDateTime.now(moscowClock).plusHours(24));
 
         Booking updatedBooking = bookingRepository.save(booking);
-
-        notificationService.notifyGuest(updatedBooking.getGuestId(),
-                "Your booking has been confirmed by host. Please complete payment within 24 hours.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        updatedBooking.getGuestId(),
+                        "Your booking has been confirmed by host. Please complete payment within 24 hours."
+                )
+        );
 
         return bookingMapper.toResponse(updatedBooking);
     }
@@ -190,9 +206,12 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.REJECTED);
         Booking updatedBooking = bookingRepository.save(booking);
-
-        notificationService.notifyGuest(updatedBooking.getGuestId(),
-                "Your booking request has been rejected by host.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        updatedBooking.getGuestId(),
+                        "Your booking request has been rejected by host."
+                )
+        );
 
         return bookingMapper.toResponse(updatedBooking);
     }
@@ -226,11 +245,18 @@ public class BookingService {
             // Cancel booking due to payment failure
             booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
             bookingRepository.save(booking);
-            
-            notificationService.notifyGuest(booking.getGuestId(),
-                    "Payment failed. Your booking has been cancelled. Please create a new booking request.");
-            notificationService.notifyHost(booking.getHostId(),
-                    "Booking cancelled due to payment failure.");
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            booking.getGuestId(),
+                            "Payment failed. Your booking has been cancelled. Please create a new booking request."
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            booking.getHostId(),
+                            "Booking cancelled due to payment failure."
+                    )
+            );
             
             throw new BookingException("Payment failed. Booking has been cancelled.");
         }
@@ -242,9 +268,12 @@ public class BookingService {
         if (!updatedBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
             activateBooking(updatedBooking);
         }
-
-        notificationService.notifyHost(updatedBooking.getHostId(),
-                "Guest has paid for booking. Payment received.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        updatedBooking.getHostId(),
+                        "Guest has paid for booking. Payment received."
+                )
+        );
 
         return bookingMapper.toResponse(updatedBooking);
     }
@@ -254,11 +283,18 @@ public class BookingService {
         validateTransition(booking.getStatus(), BookingStatus.ACTIVE);
         booking.setStatus(BookingStatus.ACTIVE);
         bookingRepository.save(booking);
-
-        notificationService.notifyGuest(booking.getGuestId(),
-                "Your booking is now active. Enjoy your stay!");
-        notificationService.notifyHost(booking.getHostId(),
-                "Booking has been activated. Guest can now check in.");
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        booking.getGuestId(),
+                        "Your booking is now active. Enjoy your stay!"
+                )
+        );
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        booking.getHostId(),
+                        "Booking has been activated. Guest can now check in."
+                )
+        );
     }
 
     @Transactional
@@ -275,12 +311,20 @@ public class BookingService {
         }
 
         Booking updatedBooking = bookingRepository.save(booking);
-        notificationService.notifyGuest(updatedBooking.getGuestId(),
-                String.format("Booking status was changed by admin from %s to %s.",
-                        previousStatus, updatedBooking.getStatus()));
-        notificationService.notifyHost(updatedBooking.getHostId(),
-                String.format("Booking status was changed by admin from %s to %s.",
-                        previousStatus, updatedBooking.getStatus()));
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        updatedBooking.getGuestId(),
+                        String.format("Booking status was changed by admin from %s to %s.",
+                                previousStatus, updatedBooking.getStatus())
+                )
+        );
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        updatedBooking.getHostId(),
+                        String.format("Booking status was changed by admin from %s to %s.",
+                                previousStatus, updatedBooking.getStatus())
+                )
+        );
         return bookingMapper.toResponse(updatedBooking);
     }
 
@@ -301,9 +345,10 @@ public class BookingService {
         booking.setSupportRequestInitiator(initiator);
         booking.setSupportRequestedAt(LocalDateTime.now(moscowClock));
         Booking updatedBooking = bookingRepository.save(booking);
-
-        notificationService.notifyAdmin(
-                "Support request for booking " + bookingId + " from " + initiator + "."
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.admin(
+                        "Support request for booking " + bookingId + " from " + initiator + "."
+                )
         );
         return bookingMapper.toResponse(updatedBooking);
     }
@@ -331,12 +376,19 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED_BY_ADMIN);
         booking.setPaymentDeadline(null);
         Booking updatedBooking = bookingRepository.save(booking);
-
-        notificationService.notifyGuest(updatedBooking.getGuestId(),
-                String.format("Booking was cancelled by admin. Refund amount: %s", refundAmount));
-        notificationService.notifyHost(updatedBooking.getHostId(),
-                String.format("Booking was cancelled by admin after support request from %s.",
-                        updatedBooking.getSupportRequestInitiator()));
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        updatedBooking.getGuestId(),
+                        String.format("Booking was cancelled by admin. Refund amount: %s", refundAmount)
+                )
+        );
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        updatedBooking.getHostId(),
+                        String.format("Booking was cancelled by admin after support request from %s.",
+                                updatedBooking.getSupportRequestInitiator())
+                )
+        );
 
         return bookingMapper.toResponse(updatedBooking);
     }
@@ -354,11 +406,18 @@ public class BookingService {
         for (Booking booking : expiredBookings) {
             booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
             bookingRepository.save(booking);
-
-            notificationService.notifyGuest(booking.getGuestId(),
-                    "Your booking has been cancelled due to payment timeout.");
-            notificationService.notifyHost(booking.getHostId(),
-                    "Booking cancelled - guest didn't complete payment within 24 hours.");
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            booking.getGuestId(),
+                            "Your booking has been cancelled due to payment timeout."
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            booking.getHostId(),
+                            "Booking cancelled - guest didn't complete payment within 24 hours."
+                    )
+            );
         }
 
         if (!expiredBookings.isEmpty()) {
@@ -380,11 +439,18 @@ public class BookingService {
             validateTransition(booking.getStatus(), BookingStatus.COMPLETED);
             booking.setStatus(BookingStatus.COMPLETED);
             bookingRepository.save(booking);
-
-            notificationService.notifyGuest(booking.getGuestId(),
-                    "Your stay has been completed. Thank you for choosing us!");
-            notificationService.notifyHost(booking.getHostId(),
-                    "Guest stay completed. Payment will be processed soon.");
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            booking.getGuestId(),
+                            "Your stay has been completed. Thank you for choosing us!"
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            booking.getHostId(),
+                            "Guest stay completed. Payment will be processed soon."
+                    )
+            );
         }
 
         if (!completedBookings.isEmpty()) {
