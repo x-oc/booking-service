@@ -153,6 +153,13 @@ call_api "BOOKINGS create #3 (for update/delete)" "POST" "${BASE_URL}/api/v1/boo
   "{\"propertyId\":${PROPERTY2_ID},\"hostId\":${HOST2_ID},\"checkInDate\":\"2026-06-01\",\"checkOutDate\":\"2026-06-06\",\"totalAmount\":9000.00}"
 BOOKING3_ID=$(extract_json_number "$LAST_BODY" "id")
 
+# -------------------- ACCESS NEGATIVE CHECKS (expected 403) --------------------
+call_api "SECURITY host cannot pay booking (expected 403)" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/pay" "${HOST_TOKEN}" ""
+call_api "SECURITY guest cannot force status (expected 403)" "PATCH" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/force-status" "${GUEST_TOKEN}" \
+  "{\"status\":\"FORCED_COMPLETED\"}"
+call_api "SECURITY admin cannot create booking as guest flow (expected 403)" "POST" "${BASE_URL}/api/v1/bookings" "${ADMIN_TOKEN}" \
+  "{\"propertyId\":${PROPERTY_ID},\"hostId\":${HOST_ID},\"checkInDate\":\"2026-07-01\",\"checkOutDate\":\"2026-07-05\",\"totalAmount\":5000.00}"
+
 call_api "BOOKINGS update #3 by guest" "PUT" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" \
   "{\"propertyId\":${PROPERTY2_ID},\"hostId\":${HOST2_ID},\"checkInDate\":\"2026-06-02\",\"checkOutDate\":\"2026-06-07\",\"totalAmount\":9500.00}"
 call_api "BOOKINGS delete #3 by guest" "DELETE" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" ""
@@ -182,4 +189,5 @@ call_api "BOOKINGS /guest filter by hostEmail" "GET" "${BASE_URL}/api/v1/booking
 
 print_block "DONE"
 echo "Script finished. Review response codes/bodies above."
+
 

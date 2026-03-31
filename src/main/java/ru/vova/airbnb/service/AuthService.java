@@ -13,7 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +23,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
+    private final TransactionTemplate transactionTemplate;
 
     public JwtResponse authenticateUser(LoginRequest loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
@@ -42,21 +43,22 @@ public class AuthService {
         );
     }
 
-    @Transactional
     public void registerUser(RegisterRequest registerRequest) {
-        if (userRepository.existsByEmail(registerRequest.getEmail())) {
-            throw new BookingException("Email already in use!");
-        }
+        transactionTemplate.executeWithoutResult(status -> {
+            if (userRepository.existsByEmail(registerRequest.getEmail())) {
+                throw new BookingException("Email already in use!");
+            }
 
-        User user = new User();
-        user.setEmail(registerRequest.getEmail());
-        user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
-        user.setFirstName(registerRequest.getFirstName());
-        user.setLastName(registerRequest.getLastName());
-        user.setPhoneNumber(registerRequest.getPhoneNumber());
-        user.setRole(registerRequest.getRole());
-        user.setVerified(false); // Requires email verification
+            User user = new User();
+            user.setEmail(registerRequest.getEmail());
+            user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
+            user.setFirstName(registerRequest.getFirstName());
+            user.setLastName(registerRequest.getLastName());
+            user.setPhoneNumber(registerRequest.getPhoneNumber());
+            user.setRole(registerRequest.getRole());
+            user.setVerified(false); // Requires email verification
 
-        userRepository.save(user);
+            userRepository.save(user);
+        });
     }
 }

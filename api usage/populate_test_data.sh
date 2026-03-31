@@ -361,3 +361,4 @@ echo "  - GET /api/v1/bookings/host?guestId=1&status=PAID"
 echo "  - GET /api/v1/bookings/guest?hostId=1&date=2026-03-03"
 echo "  - GET /api/v1/bookings/host?guestEmail=guest1@test.com&date=2026-03-02"
 
+

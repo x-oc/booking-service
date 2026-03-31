@@ -68,11 +68,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-04-03",
-    "checkOutDate": "2026-04-10",
-    "totalAmount": 10000.00
-  }'
+    "checkOutDate": "2026-04-10"}'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/confirm \
   -H "Authorization: Bearer ${HOST_TOKEN}"
@@ -91,11 +88,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-06-01",
-    "checkOutDate": "2026-06-05",
-    "totalAmount": 5000.00
-  }'
+    "checkOutDate": "2026-06-05"}'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID2}/reject \
   -H "Authorization: Bearer ${HOST_TOKEN}"
@@ -107,11 +101,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-05-01",
-    "checkOutDate": "2026-05-10",
-    "totalAmount": 12000.00
-  }'
+    "checkOutDate": "2026-05-10"}'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID3}/confirm \
   -H "Authorization: Bearer ${HOST_TOKEN}"
@@ -127,11 +118,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-02-01",
-    "checkOutDate": "2026-02-17",
-    "totalAmount": 7000.00
-  }'
+    "checkOutDate": "2026-02-17"}'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID4}/confirm \
   -H "Authorization: Bearer ${HOST_TOKEN}"
@@ -150,11 +138,8 @@ curl -X POST ${BASE_URL}/api/v1/bookings \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-06-01",
-    "checkOutDate": "2026-06-10",
-    "totalAmount": 15000.00
-  }'
+    "checkOutDate": "2026-06-10"}'
 
 curl -X PATCH ${BASE_URL}/api/v1/bookings/${BOOKING_ID5}/force-status \
   -H "Content-Type: ${CONTENT_TYPE}" \
@@ -173,11 +158,8 @@ curl -X PUT ${BASE_URL}/api/v1/bookings/${BOOKING_ID} \
   -H "Authorization: Bearer ${GUEST_TOKEN}" \
   -d '{
     "propertyId": 1,
-    "hostId": 2,
     "checkInDate": "2026-03-02",
-    "checkOutDate": "2026-03-11",
-    "totalAmount": 11000.00
-  }'
+    "checkOutDate": "2026-03-11"}'
 
 curl -X DELETE ${BASE_URL}/api/v1/bookings/${BOOKING_ID} \
   -H "Authorization: Bearer ${GUEST_TOKEN}"
@@ -188,5 +170,6 @@ curl -X POST ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request \
 
 curl -X POST ${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request/process \
   -H "Authorization: Bearer ${ADMIN_TOKEN}"
+
 
 

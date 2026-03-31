@@ -1,28 +1,28 @@
 package ru.vova.airbnb.service;
 
-import org.springframework.context.ApplicationEventPublisher;
-import ru.vova.airbnb.controller.dto.BookingRequest;
-import ru.vova.airbnb.controller.dto.BookingResponse;
-import ru.vova.airbnb.events.BookingNotificationEvent;
-import ru.vova.airbnb.entity.Booking;
-import ru.vova.airbnb.entity.BookingStatus;
-import ru.vova.airbnb.entity.Property;
-import ru.vova.airbnb.entity.SupportRequestInitiator;
-import ru.vova.airbnb.entity.User;
-import ru.vova.airbnb.exception.BookingException;
-import ru.vova.airbnb.mapper.BookingMapper;
-import ru.vova.airbnb.repository.BookingRepository;
-import ru.vova.airbnb.repository.UserRepository;
-import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import ru.vova.airbnb.controller.dto.BookingRequest;
+import ru.vova.airbnb.controller.dto.BookingResponse;
+import ru.vova.airbnb.entity.Booking;
+import ru.vova.airbnb.entity.BookingStatus;
+import ru.vova.airbnb.entity.Property;
+import ru.vova.airbnb.entity.SupportRequestInitiator;
+import ru.vova.airbnb.entity.User;
+import ru.vova.airbnb.events.BookingNotificationEvent;
+import ru.vova.airbnb.exception.BookingException;
+import ru.vova.airbnb.mapper.BookingMapper;
+import ru.vova.airbnb.repository.BookingRepository;
+import ru.vova.airbnb.repository.UserRepository;
+import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -31,7 +31,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -43,441 +45,431 @@ public class BookingService {
     private final PropertyService propertyService;
     private final BookingMapper bookingMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final Random random = new Random();
+    private final TransactionTemplate transactionTemplate;
     private final Clock moscowClock;
 
-    @Transactional
-    @PreAuthorize("hasRole('GUEST')")
+    private final Random random = new Random();
+
+    @PreAuthorize("hasAuthority('BOOKING_CREATE')")
     public BookingResponse createBooking(BookingRequest request, Long guestId) {
-        log.info("Creating booking for guest: {}", guestId);
+        return inTx(() -> {
+            log.info("Creating booking for guest: {}", guestId);
 
-        validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
+            validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
-        Property property = propertyService.lockPropertyForUpdate(request.getPropertyId());
-        validatePropertyActive(property);
-        validateHostOwnsProperty(property, request.getHostId());
+            Property property = propertyService.lockPropertyForUpdate(request.getPropertyId());
+            validatePropertyActive(property);
+            validateHostOwnsProperty(property, request.getHostId());
 
-        if (bookingRepository.existsOverlappingBooking(
-                request.getPropertyId(),
-                request.getCheckInDate(),
-                request.getCheckOutDate(),
-                Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
-            throw new BookingException("Property is already booked for selected dates");
-        }
+            if (bookingRepository.existsOverlappingBooking(
+                    request.getPropertyId(),
+                    request.getCheckInDate(),
+                    request.getCheckOutDate(),
+                    Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                throw new BookingException("Property is already booked for selected dates");
+            }
 
-        Booking booking = bookingMapper.toEntity(request);
-        booking.setGuestId(guestId);
-        booking.setHostId(property.getHostId());
-        booking.setStatus(BookingStatus.CREATED);
-        booking.setRefundedAmount(BigDecimal.ZERO);
-        booking.setSupportRequestInitiator(null);
-        booking.setSupportRequestedAt(null);
+            Booking booking = bookingMapper.toEntity(request);
+            booking.setGuestId(guestId);
+            booking.setHostId(property.getHostId());
+            booking.setStatus(BookingStatus.CREATED);
+            booking.setRefundedAmount(BigDecimal.ZERO);
+            booking.setSupportRequestInitiator(null);
+            booking.setSupportRequestedAt(null);
 
-        Booking savedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        savedBooking.getHostId(),
-                        "New booking request received for property: " + savedBooking.getPropertyId()
-                )
-        );
+            Booking savedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            savedBooking.getHostId(),
+                            "New booking request received for property: " + savedBooking.getPropertyId()
+                    )
+            );
 
-        return bookingMapper.toResponse(savedBooking);
+            return bookingMapper.toResponse(savedBooking);
+        });
     }
 
-    @Transactional
-    @PreAuthorize("hasRole('GUEST')")
+    @PreAuthorize("hasAuthority('BOOKING_UPDATE')")
     public BookingResponse updateBooking(Long bookingId, BookingRequest request, Long guestId) {
-        log.info("Guest {} updating booking: {}", guestId, bookingId);
-        validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
+        return inTx(() -> {
+            log.info("Guest {} updating booking: {}", guestId, bookingId);
+            validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
-        Booking booking = findBookingById(bookingId);
-        if (!booking.getGuestId().equals(guestId)) {
-            throw new BookingException("You don't have permission to update this booking");
-        }
-        validateMutableBeforePayment(booking.getStatus());
+            Booking booking = findBookingById(bookingId);
+            if (!booking.getGuestId().equals(guestId)) {
+                throw new BookingException("You don't have permission to update this booking");
+            }
+            validateMutableBeforePayment(booking.getStatus());
 
-        Property lockedTargetProperty = lockPropertiesForUpdate(booking.getPropertyId(), request.getPropertyId())
-                .stream()
-                .filter(property -> property.getId().equals(request.getPropertyId()))
-                .findFirst()
-                .orElseThrow(() -> new BookingException("Property not found with id: " + request.getPropertyId()));
-        validatePropertyActive(lockedTargetProperty);
-        validateHostOwnsProperty(lockedTargetProperty, request.getHostId());
+            Property lockedTargetProperty = lockPropertiesForUpdate(booking.getPropertyId(), request.getPropertyId())
+                    .stream()
+                    .filter(property -> property.getId().equals(request.getPropertyId()))
+                    .findFirst()
+                    .orElseThrow(() -> new BookingException("Property not found with id: " + request.getPropertyId()));
+            validatePropertyActive(lockedTargetProperty);
+            validateHostOwnsProperty(lockedTargetProperty, request.getHostId());
 
-        if (bookingRepository.existsOverlappingBookingExcludingId(
-                bookingId,
-                request.getPropertyId(),
-                request.getCheckInDate(),
-                request.getCheckOutDate(),
-                Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
-            throw new BookingException("Property is already booked for selected dates");
-        }
+            if (bookingRepository.existsOverlappingBookingExcludingId(
+                    bookingId,
+                    request.getPropertyId(),
+                    request.getCheckInDate(),
+                    request.getCheckOutDate(),
+                    Arrays.asList(BookingStatus.CREATED, BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                throw new BookingException("Property is already booked for selected dates");
+            }
 
-        booking.setPropertyId(request.getPropertyId());
-        booking.setHostId(lockedTargetProperty.getHostId());
-        booking.setCheckInDate(request.getCheckInDate());
-        booking.setCheckOutDate(request.getCheckOutDate());
-        booking.setTotalAmount(request.getTotalAmount());
-        booking.setStatus(BookingStatus.CREATED);
-        booking.setPaymentDeadline(null);
-        booking.setRefundedAmount(BigDecimal.ZERO);
-        booking.setSupportRequestInitiator(null);
-        booking.setSupportRequestedAt(null);
-
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        updatedBooking.getHostId(),
-                        "Booking request was updated by guest and requires your review again."
-                )
-        );
-        return bookingMapper.toResponse(updatedBooking);
-    }
-
-    @Transactional
-    @PreAuthorize("hasRole('GUEST')")
-    public void deleteBooking(Long bookingId, Long guestId) {
-        log.info("Guest {} deleting booking: {}", guestId, bookingId);
-
-        Booking booking = findBookingById(bookingId);
-        if (!booking.getGuestId().equals(guestId)) {
-            throw new BookingException("You don't have permission to delete this booking");
-        }
-        validateMutableBeforePayment(booking.getStatus());
-
-        bookingRepository.delete(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        booking.getHostId(),
-                        "Booking request was deleted by guest before payment."
-                )
-        );
-    }
-
-    @Transactional
-    @PreAuthorize("hasRole('HOST')")
-    public BookingResponse confirmBooking(Long bookingId, Long hostId) {
-        log.info("Host {} confirming booking: {}", hostId, bookingId);
-
-        Booking booking = findBookingById(bookingId);
-        propertyService.lockPropertyForUpdate(booking.getPropertyId());
-
-        if (!booking.getHostId().equals(hostId)) {
-            throw new BookingException("You don't have permission to confirm this booking");
-        }
-
-        if (bookingRepository.existsOverlappingBookingExcludingId(
-                booking.getId(),
-                booking.getPropertyId(),
-                booking.getCheckInDate(),
-                booking.getCheckOutDate(),
-                Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
-            throw new BookingException("Property is already booked for selected dates");
-        }
-
-        validateTransition(booking.getStatus(), BookingStatus.AWAITING_PAYMENT);
-
-        booking.setStatus(BookingStatus.AWAITING_PAYMENT);
-        booking.setPaymentDeadline(LocalDateTime.now(moscowClock).plusHours(24));
-
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                        updatedBooking.getGuestId(),
-                        "Your booking has been confirmed by host. Please complete payment within 24 hours."
-                )
-        );
-
-        return bookingMapper.toResponse(updatedBooking);
-    }
-
-    @Transactional
-    @PreAuthorize("hasRole('HOST')")
-    public BookingResponse rejectBooking(Long bookingId, Long hostId) {
-        log.info("Host {} rejecting booking: {}", hostId, bookingId);
-
-        Booking booking = findBookingById(bookingId);
-
-        if (!booking.getHostId().equals(hostId)) {
-            throw new BookingException("You don't have permission to reject this booking");
-        }
-
-        validateTransition(booking.getStatus(), BookingStatus.REJECTED);
-
-        booking.setStatus(BookingStatus.REJECTED);
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                        updatedBooking.getGuestId(),
-                        "Your booking request has been rejected by host."
-                )
-        );
-
-        return bookingMapper.toResponse(updatedBooking);
-    }
-
-    @Transactional
-    @PreAuthorize("hasRole('GUEST')")
-    public BookingResponse payForBooking(Long bookingId, Long guestId) {
-        log.info("Guest {} paying for booking: {}", guestId, bookingId);
-
-        Booking booking = findBookingById(bookingId);
-
-        if (!booking.getGuestId().equals(guestId)) {
-            throw new BookingException("You don't have permission to pay for this booking");
-        }
-
-        validateTransition(booking.getStatus(), BookingStatus.PAID);
-
-        // Check if payment deadline hasn't expired
-        if (booking.getPaymentDeadline() != null &&
-                LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            throw new BookingException("Payment deadline has expired");
-        }
-
-        // Simulate payment failure with 20% probability
-        if (random.nextDouble() < 0.2) {
-            log.warn("Payment failed for booking {} (guest {}). Payment simulation: 20% failure rate triggered.", 
-                    bookingId, guestId);
-            
-            // Cancel booking due to payment failure
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.guest(
-                            booking.getGuestId(),
-                            "Payment failed. Your booking has been cancelled. Please create a new booking request."
-                    )
-            );
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.host(
-                            booking.getHostId(),
-                            "Booking cancelled due to payment failure."
-                    )
-            );
-            
-            throw new BookingException("Payment failed. Booking has been cancelled.");
-        }
-
-        booking.setStatus(BookingStatus.PAID);
-        Booking updatedBooking = bookingRepository.save(booking);
-
-        // Automatically activate if check-in date is today or in the past
-        if (!updatedBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
-            activateBooking(updatedBooking);
-        }
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        updatedBooking.getHostId(),
-                        "Guest has paid for booking. Payment received."
-                )
-        );
-
-        return bookingMapper.toResponse(updatedBooking);
-    }
-
-    @Transactional
-    public void activateBooking(Booking booking) {
-        validateTransition(booking.getStatus(), BookingStatus.ACTIVE);
-        booking.setStatus(BookingStatus.ACTIVE);
-        bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                        booking.getGuestId(),
-                        "Your booking is now active. Enjoy your stay!"
-                )
-        );
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        booking.getHostId(),
-                        "Booking has been activated. Guest can now check in."
-                )
-        );
-    }
-
-    @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
-    public BookingResponse forceChangeStatus(Long bookingId, BookingStatus newStatus) {
-        log.info("Admin forcing status change for booking: {} to {}", bookingId, newStatus);
-
-        Booking booking = findBookingById(bookingId);
-        BookingStatus previousStatus = booking.getStatus();
-        validateAdminTransition(previousStatus, newStatus);
-        booking.setStatus(newStatus);
-        if (newStatus != BookingStatus.AWAITING_PAYMENT) {
+            booking.setPropertyId(request.getPropertyId());
+            booking.setHostId(lockedTargetProperty.getHostId());
+            booking.setCheckInDate(request.getCheckInDate());
+            booking.setCheckOutDate(request.getCheckOutDate());
+            booking.setTotalAmount(request.getTotalAmount());
+            booking.setStatus(BookingStatus.CREATED);
             booking.setPaymentDeadline(null);
-        }
+            booking.setRefundedAmount(BigDecimal.ZERO);
+            booking.setSupportRequestInitiator(null);
+            booking.setSupportRequestedAt(null);
 
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                        updatedBooking.getGuestId(),
-                        String.format("Booking status was changed by admin from %s to %s.",
-                                previousStatus, updatedBooking.getStatus())
-                )
-        );
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        updatedBooking.getHostId(),
-                        String.format("Booking status was changed by admin from %s to %s.",
-                                previousStatus, updatedBooking.getStatus())
-                )
-        );
-        return bookingMapper.toResponse(updatedBooking);
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            updatedBooking.getHostId(),
+                            "Booking request was updated by guest and requires your review again."
+                    )
+            );
+            return bookingMapper.toResponse(updatedBooking);
+        });
     }
 
-    @Transactional
-    @PreAuthorize("hasAnyRole('GUEST', 'HOST')")
+    @PreAuthorize("hasAuthority('BOOKING_DELETE')")
+    public void deleteBooking(Long bookingId, Long guestId) {
+        inTxVoid(() -> {
+            log.info("Guest {} deleting booking: {}", guestId, bookingId);
+
+            Booking booking = findBookingById(bookingId);
+            if (!booking.getGuestId().equals(guestId)) {
+                throw new BookingException("You don't have permission to delete this booking");
+            }
+            validateMutableBeforePayment(booking.getStatus());
+
+            bookingRepository.delete(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            booking.getHostId(),
+                            "Booking request was deleted by guest before payment."
+                    )
+            );
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_CONFIRM')")
+    public BookingResponse confirmBooking(Long bookingId, Long hostId) {
+        return inTx(() -> {
+            log.info("Host {} confirming booking: {}", hostId, bookingId);
+
+            Booking booking = findBookingById(bookingId);
+            propertyService.lockPropertyForUpdate(booking.getPropertyId());
+
+            if (!booking.getHostId().equals(hostId)) {
+                throw new BookingException("You don't have permission to confirm this booking");
+            }
+
+            if (bookingRepository.existsOverlappingBookingExcludingId(
+                    booking.getId(),
+                    booking.getPropertyId(),
+                    booking.getCheckInDate(),
+                    booking.getCheckOutDate(),
+                    Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAID, BookingStatus.ACTIVE))) {
+                throw new BookingException("Property is already booked for selected dates");
+            }
+
+            validateTransition(booking.getStatus(), BookingStatus.AWAITING_PAYMENT);
+
+            booking.setStatus(BookingStatus.AWAITING_PAYMENT);
+            booking.setPaymentDeadline(LocalDateTime.now(moscowClock).plusHours(24));
+
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            updatedBooking.getGuestId(),
+                            "Your booking has been confirmed by host. Please complete payment within 24 hours."
+                    )
+            );
+
+            return bookingMapper.toResponse(updatedBooking);
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_REJECT')")
+    public BookingResponse rejectBooking(Long bookingId, Long hostId) {
+        return inTx(() -> {
+            log.info("Host {} rejecting booking: {}", hostId, bookingId);
+
+            Booking booking = findBookingById(bookingId);
+
+            if (!booking.getHostId().equals(hostId)) {
+                throw new BookingException("You don't have permission to reject this booking");
+            }
+
+            validateTransition(booking.getStatus(), BookingStatus.REJECTED);
+
+            booking.setStatus(BookingStatus.REJECTED);
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            updatedBooking.getGuestId(),
+                            "Your booking request has been rejected by host."
+                    )
+            );
+
+            return bookingMapper.toResponse(updatedBooking);
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_PAY')")
+    public BookingResponse payForBooking(Long bookingId, Long guestId) {
+        return inTx(() -> {
+            log.info("Guest {} paying for booking: {}", guestId, bookingId);
+
+            Booking booking = findBookingById(bookingId);
+
+            if (!booking.getGuestId().equals(guestId)) {
+                throw new BookingException("You don't have permission to pay for this booking");
+            }
+
+            validateTransition(booking.getStatus(), BookingStatus.PAID);
+
+            if (booking.getPaymentDeadline() != null
+                    && LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                throw new BookingException("Payment deadline has expired");
+            }
+
+            if (random.nextDouble() < 0.2) {
+                log.warn("Payment failed for booking {} (guest {}). Payment simulation: 20% failure rate triggered.",
+                        bookingId, guestId);
+
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.guest(
+                                booking.getGuestId(),
+                                "Payment failed. Your booking has been cancelled. Please create a new booking request."
+                        )
+                );
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.host(
+                                booking.getHostId(),
+                                "Booking cancelled due to payment failure."
+                        )
+                );
+                throw new BookingException("Payment failed. Booking has been cancelled.");
+            }
+
+            booking.setStatus(BookingStatus.PAID);
+            Booking updatedBooking = bookingRepository.save(booking);
+
+            if (!updatedBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
+                activateBooking(updatedBooking);
+            }
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            updatedBooking.getHostId(),
+                            "Guest has paid for booking. Payment received."
+                    )
+            );
+
+            return bookingMapper.toResponse(updatedBooking);
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_FORCE_STATUS')")
+    public BookingResponse forceChangeStatus(Long bookingId, BookingStatus newStatus) {
+        return inTx(() -> {
+            log.info("Admin forcing status change for booking: {} to {}", bookingId, newStatus);
+
+            Booking booking = findBookingById(bookingId);
+            BookingStatus previousStatus = booking.getStatus();
+            validateAdminTransition(previousStatus, newStatus);
+            booking.setStatus(newStatus);
+            if (newStatus != BookingStatus.AWAITING_PAYMENT) {
+                booking.setPaymentDeadline(null);
+            }
+
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            updatedBooking.getGuestId(),
+                            String.format("Booking status was changed by admin from %s to %s.",
+                                    previousStatus, updatedBooking.getStatus())
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            updatedBooking.getHostId(),
+                            String.format("Booking status was changed by admin from %s to %s.",
+                                    previousStatus, updatedBooking.getStatus())
+                    )
+            );
+            return bookingMapper.toResponse(updatedBooking);
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_SUPPORT_REQUEST')")
     public BookingResponse requestSupportForPaidBooking(Long bookingId, UserDetailsImpl currentUser) {
-        Booking booking = findBookingById(bookingId);
-        assertCanRequestSupport(booking, currentUser);
+        return inTx(() -> {
+            Booking booking = findBookingById(bookingId);
+            assertCanRequestSupport(booking, currentUser);
 
-        if (booking.getSupportRequestInitiator() != null) {
-            throw new BookingException("Support request is already created for this booking");
-        }
+            if (booking.getSupportRequestInitiator() != null) {
+                throw new BookingException("Support request is already created for this booking");
+            }
 
-        SupportRequestInitiator initiator = currentUser.getRole().equals("GUEST")
-                ? SupportRequestInitiator.GUEST
-                : SupportRequestInitiator.HOST;
+            SupportRequestInitiator initiator = currentUser.getRole().equals("GUEST")
+                    ? SupportRequestInitiator.GUEST
+                    : SupportRequestInitiator.HOST;
 
-        booking.setSupportRequestInitiator(initiator);
-        booking.setSupportRequestedAt(LocalDateTime.now(moscowClock));
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.admin(
-                        "Support request for booking " + bookingId + " from " + initiator + "."
-                )
-        );
-        return bookingMapper.toResponse(updatedBooking);
+            booking.setSupportRequestInitiator(initiator);
+            booking.setSupportRequestedAt(LocalDateTime.now(moscowClock));
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.admin(
+                            "Support request for booking " + bookingId + " from " + initiator + "."
+                    )
+            );
+            return bookingMapper.toResponse(updatedBooking);
+        });
     }
 
-    @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('BOOKING_SUPPORT_PROCESS')")
     public BookingResponse processSupportRequest(Long bookingId) {
-        Booking booking = findBookingById(bookingId);
+        return inTx(() -> {
+            Booking booking = findBookingById(bookingId);
 
-        if (booking.getSupportRequestInitiator() == null) {
-            throw new BookingException("Support request for this booking was not found");
-        }
-        if (booking.getStatus() != BookingStatus.PAID && booking.getStatus() != BookingStatus.ACTIVE) {
-            throw new BookingException("Support request can be processed only for paid or active bookings");
-        }
+            if (booking.getSupportRequestInitiator() == null) {
+                throw new BookingException("Support request for this booking was not found");
+            }
+            if (booking.getStatus() != BookingStatus.PAID && booking.getStatus() != BookingStatus.ACTIVE) {
+                throw new BookingException("Support request can be processed only for paid or active bookings");
+            }
 
-        BigDecimal refundRate = booking.getSupportRequestInitiator() == SupportRequestInitiator.GUEST
-                ? new BigDecimal("0.50")
-                : BigDecimal.ONE;
-        BigDecimal refundAmount = booking.getTotalAmount()
-                .multiply(refundRate)
-                .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal refundRate = booking.getSupportRequestInitiator() == SupportRequestInitiator.GUEST
+                    ? new BigDecimal("0.50")
+                    : BigDecimal.ONE;
+            BigDecimal refundAmount = booking.getTotalAmount()
+                    .multiply(refundRate)
+                    .setScale(2, RoundingMode.HALF_UP);
 
-        booking.setRefundedAmount(refundAmount);
-        booking.setStatus(BookingStatus.CANCELLED_BY_ADMIN);
-        booking.setPaymentDeadline(null);
-        Booking updatedBooking = bookingRepository.save(booking);
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                        updatedBooking.getGuestId(),
-                        String.format("Booking was cancelled by admin. Refund amount: %s", refundAmount)
-                )
-        );
-        applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                        updatedBooking.getHostId(),
-                        String.format("Booking was cancelled by admin after support request from %s.",
-                                updatedBooking.getSupportRequestInitiator())
-                )
-        );
+            booking.setRefundedAmount(refundAmount);
+            booking.setStatus(BookingStatus.CANCELLED_BY_ADMIN);
+            booking.setPaymentDeadline(null);
+            Booking updatedBooking = bookingRepository.save(booking);
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            updatedBooking.getGuestId(),
+                            String.format("Booking was cancelled by admin. Refund amount: %s", refundAmount)
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            updatedBooking.getHostId(),
+                            String.format("Booking was cancelled by admin after support request from %s.",
+                                    updatedBooking.getSupportRequestInitiator())
+                    )
+            );
 
-        return bookingMapper.toResponse(updatedBooking);
+            return bookingMapper.toResponse(updatedBooking);
+        });
     }
 
-    @Transactional
     public void cancelExpiredPayments() {
-        log.info("Checking for expired payments");
+        inTxVoid(() -> {
+            log.info("Checking for expired payments");
 
-        List<Booking> expiredBookings = bookingRepository
-                .findByStatusAndPaymentDeadlineBefore(
-                        BookingStatus.AWAITING_PAYMENT,
-                        LocalDateTime.now(moscowClock)
+            List<Booking> expiredBookings = bookingRepository
+                    .findByStatusAndPaymentDeadlineBefore(
+                            BookingStatus.AWAITING_PAYMENT,
+                            LocalDateTime.now(moscowClock)
+                    );
+
+            for (Booking booking : expiredBookings) {
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.guest(
+                                booking.getGuestId(),
+                                "Your booking has been cancelled due to payment timeout."
+                        )
                 );
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.host(
+                                booking.getHostId(),
+                                "Booking cancelled - guest didn't complete payment within 24 hours."
+                        )
+                );
+            }
 
-        for (Booking booking : expiredBookings) {
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.guest(
-                            booking.getGuestId(),
-                            "Your booking has been cancelled due to payment timeout."
-                    )
-            );
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.host(
-                            booking.getHostId(),
-                            "Booking cancelled - guest didn't complete payment within 24 hours."
-                    )
-            );
-        }
-
-        if (!expiredBookings.isEmpty()) {
-            log.info("Cancelled {} expired bookings", expiredBookings.size());
-        }
+            if (!expiredBookings.isEmpty()) {
+                log.info("Cancelled {} expired bookings", expiredBookings.size());
+            }
+        });
     }
 
-    @Transactional
     public void completeStays() {
-        log.info("Checking for completed stays");
+        inTxVoid(() -> {
+            log.info("Checking for completed stays");
 
-        List<Booking> completedBookings = bookingRepository
-                .findByStatusAndCheckOutDateBefore(
-                        BookingStatus.ACTIVE,
-                        LocalDate.now(moscowClock)
+            List<Booking> completedBookings = bookingRepository
+                    .findByStatusAndCheckOutDateBefore(
+                            BookingStatus.ACTIVE,
+                            LocalDate.now(moscowClock)
+                    );
+
+            for (Booking booking : completedBookings) {
+                validateTransition(booking.getStatus(), BookingStatus.COMPLETED);
+                booking.setStatus(BookingStatus.COMPLETED);
+                bookingRepository.save(booking);
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.guest(
+                                booking.getGuestId(),
+                                "Your stay has been completed. Thank you for choosing us!"
+                        )
                 );
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.host(
+                                booking.getHostId(),
+                                "Guest stay completed. Payment will be processed soon."
+                        )
+                );
+            }
 
-        for (Booking booking : completedBookings) {
-            validateTransition(booking.getStatus(), BookingStatus.COMPLETED);
-            booking.setStatus(BookingStatus.COMPLETED);
-            bookingRepository.save(booking);
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.guest(
-                            booking.getGuestId(),
-                            "Your stay has been completed. Thank you for choosing us!"
-                    )
-            );
-            applicationEventPublisher.publishEvent(
-                    BookingNotificationEvent.host(
-                            booking.getHostId(),
-                            "Guest stay completed. Payment will be processed soon."
-                    )
-            );
-        }
-
-        if (!completedBookings.isEmpty()) {
-            log.info("Completed {} stays", completedBookings.size());
-        }
+            if (!completedBookings.isEmpty()) {
+                log.info("Completed {} stays", completedBookings.size());
+            }
+        });
     }
 
-    @Transactional
     public void activateDueBookings() {
-        log.info("Activating paid bookings with check-in date today or earlier");
+        inTxVoid(() -> {
+            log.info("Activating paid bookings with check-in date today or earlier");
 
-        List<Booking> bookingsToActivate = bookingRepository
-                .findByStatusAndCheckInDateBeforeOrEqual(
-                        BookingStatus.PAID,
-                        LocalDate.now(moscowClock)
-                );
+            List<Booking> bookingsToActivate = bookingRepository
+                    .findByStatusAndCheckInDateBeforeOrEqual(
+                            BookingStatus.PAID,
+                            LocalDate.now(moscowClock)
+                    );
 
-        for (Booking booking : bookingsToActivate) {
-            activateBooking(booking);
-        }
+            for (Booking booking : bookingsToActivate) {
+                activateBooking(booking);
+            }
 
-        if (!bookingsToActivate.isEmpty()) {
-            log.info("Activated {} bookings", bookingsToActivate.size());
-        }
+            if (!bookingsToActivate.isEmpty()) {
+                log.info("Activated {} bookings", bookingsToActivate.size());
+            }
+        });
     }
 
-    @PreAuthorize("hasRole('HOST')")
+    @PreAuthorize("hasAuthority('BOOKING_LIST_HOST')")
     public Page<BookingResponse> getHostBookings(Long guestId,
                                                  String guestEmail,
                                                  LocalDate date,
@@ -497,7 +489,7 @@ public class BookingService {
                 .map(bookingMapper::toResponse);
     }
 
-    @PreAuthorize("hasRole('GUEST')")
+    @PreAuthorize("hasAuthority('BOOKING_LIST_GUEST')")
     public Page<BookingResponse> getGuestBookings(Long hostId,
                                                   String hostEmail,
                                                   LocalDate date,
@@ -517,7 +509,7 @@ public class BookingService {
                 .map(bookingMapper::toResponse);
     }
 
-    @PreAuthorize("hasAnyRole('GUEST', 'HOST', 'ADMIN')")
+    @PreAuthorize("hasAnyAuthority('BOOKING_VIEW_OWN', 'BOOKING_VIEW_ANY')")
     public BookingResponse getBookingById(Long bookingId, UserDetailsImpl currentUser) {
         Booking booking = findBookingById(bookingId);
         if (!isAdmin(currentUser)
@@ -545,14 +537,10 @@ public class BookingService {
 
     private void validateTransition(BookingStatus current, BookingStatus target) {
         boolean isValid = switch (current) {
-            case CREATED -> target == BookingStatus.AWAITING_PAYMENT ||
-                    target == BookingStatus.REJECTED;
-            case AWAITING_PAYMENT -> target == BookingStatus.PAID ||
-                    target == BookingStatus.CANCELLED_EXPIRED;
-            case PAID -> target == BookingStatus.ACTIVE ||
-                    target == BookingStatus.CANCELLED_BY_ADMIN;
-            case ACTIVE -> target == BookingStatus.COMPLETED ||
-                    target == BookingStatus.CANCELLED_BY_ADMIN;
+            case CREATED -> target == BookingStatus.AWAITING_PAYMENT || target == BookingStatus.REJECTED;
+            case AWAITING_PAYMENT -> target == BookingStatus.PAID || target == BookingStatus.CANCELLED_EXPIRED;
+            case PAID -> target == BookingStatus.ACTIVE || target == BookingStatus.CANCELLED_BY_ADMIN;
+            case ACTIVE -> target == BookingStatus.COMPLETED || target == BookingStatus.CANCELLED_BY_ADMIN;
             case COMPLETED, CANCELLED_EXPIRED, REJECTED, FORCED_COMPLETED, CANCELLED_BY_ADMIN -> false;
         };
 
@@ -661,5 +649,31 @@ public class BookingService {
         Property first = propertyService.lockPropertyForUpdate(low);
         Property second = propertyService.lockPropertyForUpdate(high);
         return List.of(first, second);
+    }
+
+    private void activateBooking(Booking booking) {
+        validateTransition(booking.getStatus(), BookingStatus.ACTIVE);
+        booking.setStatus(BookingStatus.ACTIVE);
+        bookingRepository.save(booking);
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.guest(
+                        booking.getGuestId(),
+                        "Your booking is now active. Enjoy your stay!"
+                )
+        );
+        applicationEventPublisher.publishEvent(
+                BookingNotificationEvent.host(
+                        booking.getHostId(),
+                        "Booking has been activated. Guest can now check in."
+                )
+        );
+    }
+
+    private <T> T inTx(Supplier<T> action) {
+        return Objects.requireNonNull(transactionTemplate.execute(status -> action.get()));
+    }
+
+    private void inTxVoid(Runnable action) {
+        transactionTemplate.executeWithoutResult(status -> action.run());
     }
 }

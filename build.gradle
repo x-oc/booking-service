@@ -25,6 +25,10 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.atomikos:transactions:6.0.0'
+    implementation 'com.atomikos:transactions-api:6.0.0'
+    implementation 'com.atomikos:transactions-jta:6.0.0:jakarta'
+    implementation 'com.atomikos:transactions-jdbc:6.0.0:jakarta'
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     implementation 'io.jsonwebtoken:jjwt-impl:0.13.0'
     implementation 'io.jsonwebtoken:jjwt-jackson:0.13.0'

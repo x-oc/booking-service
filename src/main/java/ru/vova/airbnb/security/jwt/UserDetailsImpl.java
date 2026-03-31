@@ -1,6 +1,7 @@
 package ru.vova.airbnb.security.jwt;
 
 import io.jsonwebtoken.Claims;
+import ru.vova.airbnb.entity.UserRole;
 import ru.vova.airbnb.entity.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
@@ -11,7 +12,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Data
 @Builder
@@ -56,7 +58,15 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+
+        UserRole userRole = UserRole.valueOf(role);
+        userRole.getPrivileges().forEach(privilege ->
+                authorities.add(new SimpleGrantedAuthority(privilege.name()))
+        );
+
+        return authorities;
     }
 
     @Override

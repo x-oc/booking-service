@@ -16,6 +16,10 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
+        transaction:
+          coordinator_class: jta
+          jta:
+            platform: org.hibernate.engine.transaction.jta.platform.internal.AtomikosJtaPlatform
         jdbc:
           time_zone: Europe/Moscow
         dialect: org.hibernate.dialect.PostgreSQLDialect

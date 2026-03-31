@@ -3,7 +3,7 @@ package ru.vova.airbnb.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import ru.vova.airbnb.controller.dto.PropertyCreateRequest;
 import ru.vova.airbnb.controller.dto.PropertyResponse;
 import ru.vova.airbnb.entity.Property;
@@ -17,28 +17,30 @@ import java.util.List;
 public class PropertyService {
 
     private final PropertyRepository propertyRepository;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
-    @PreAuthorize("hasRole('HOST')")
+    @PreAuthorize("hasAuthority('PROPERTY_CREATE')")
     public PropertyResponse createProperty(PropertyCreateRequest request, Long hostId) {
-        Property property = new Property();
-        property.setHostId(hostId);
-        property.setTitle(request.getTitle());
-        property.setAddress(request.getAddress());
-        property.setActive(true);
+        return transactionTemplate.execute(status -> {
+            Property property = new Property();
+            property.setHostId(hostId);
+            property.setTitle(request.getTitle());
+            property.setAddress(request.getAddress());
+            property.setActive(true);
 
-        Property saved = propertyRepository.save(property);
-        return toResponse(saved);
+            Property saved = propertyRepository.save(property);
+            return toResponse(saved);
+        });
     }
 
-    @PreAuthorize("hasAnyRole('HOST', 'ADMIN')")
+    @PreAuthorize("hasAuthority('PROPERTY_VIEW_HOST_LIST')")
     public List<PropertyResponse> getHostProperties(Long hostId) {
         return propertyRepository.findByHostId(hostId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
-    @PreAuthorize("hasAnyRole('GUEST', 'HOST', 'ADMIN')")
+    @PreAuthorize("hasAuthority('PROPERTY_VIEW')")
     public PropertyResponse getPropertyById(Long propertyId) {
         return toResponse(findPropertyById(propertyId));
     }
@@ -48,7 +50,6 @@ public class PropertyService {
                 .orElseThrow(() -> new BookingException("Property not found with id: " + propertyId));
     }
 
-    @Transactional
     public Property lockPropertyForUpdate(Long propertyId) {
         return propertyRepository.findByIdForUpdate(propertyId)
                 .orElseThrow(() -> new BookingException("Property not found with id: " + propertyId));

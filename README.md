@@ -30,3 +30,26 @@ java -jar app.jar
 
 ## После запуска доступны:
 - 📚 http://localhost:28800/swagger-ui.html API документация
+
+## Модель доступа (RBAC + privileges)
+
+Роли в системе:
+- `GUEST`
+- `HOST`
+- `ADMIN`
+
+Ключевые привилегии:
+- `BOOKING_CREATE`, `BOOKING_UPDATE`, `BOOKING_DELETE`, `BOOKING_PAY`
+- `BOOKING_CONFIRM`, `BOOKING_REJECT`
+- `BOOKING_FORCE_STATUS`, `BOOKING_SUPPORT_PROCESS`
+- `BOOKING_SUPPORT_REQUEST`, `BOOKING_VIEW_OWN`, `BOOKING_VIEW_ANY`
+- `BOOKING_LIST_HOST`, `BOOKING_LIST_GUEST`
+- `PROPERTY_CREATE`, `PROPERTY_VIEW`, `PROPERTY_VIEW_HOST_LIST`
+
+Проверка прав реализована на уровне сервисов через `@PreAuthorize` по привилегиям.
+
+## Транзакции
+
+- Для управления транзакциями используется Spring JTA + Atomikos.
+- Границы бизнес-транзакций реализованы программно через `TransactionTemplate`.
+- Программные транзакции используются в основных прецедентах (создание/изменение/подтверждение/оплата/админ-обработка бронирований и т.д.).
