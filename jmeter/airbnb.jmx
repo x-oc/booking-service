@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Test Plan">
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <Arguments guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="BASE_PATH" elementType="Argument">
+            <stringProp name="Argument.name">BASE_PATH</stringProp>
+            <stringProp name="Argument.value">api/v1/</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </Arguments>
+      <hashTree/>
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP Request Defaults">
+        <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <stringProp name="HTTPSampler.port">28800</stringProp>
+        <stringProp name="HTTPSampler.protocol">http</stringProp>
+        <stringProp name="HTTPSampler.path">${BASE_PATH}</stringProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+          <collectionProp name="Arguments.arguments"/>
+        </elementProp>
+        <stringProp name="HTTPSampler.implementation">HttpClient4</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Accept</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Authorization</stringProp>
+            <stringProp name="Header.value">Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJndWVzdEB0ZXN0LmNvbSIsInJvbGUiOiJHVUVTVCIsImZpcnN0TmFtZSI6Ikl2YW4iLCJsYXN0TmFtZSI6IlBldHJvdiIsImVuYWJsZWQiOnRydWUsInZlcmlmaWVkIjpmYWxzZSwiaWF0IjoxNzcyNjM3MTI0LCJleHAiOjE3NzI3MjM1MjR9.udtyAlKDy2pmYSUMLoic0FNZBMl-7GBjYPLaLh_ofONKSL7_jXWEq6TuxLINyRLdOyYwwoUyXq-ir7uaxN-JFw</stringProp>
+          </elementProp>
+        </collectionProp>
+      </HeaderManager>
+      <hashTree/>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Bookings">
+        <intProp name="ThreadGroup.num_threads">2</intProp>
+        <intProp name="ThreadGroup.ramp_time">0</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <RandomVariableConfig guiclass="TestBeanGUI" testclass="RandomVariableConfig" testname="Random Variable">
+          <stringProp name="variableName">randomVar</stringProp>
+          <stringProp name="outputFormat"></stringProp>
+          <stringProp name="minimumValue">1</stringProp>
+          <stringProp name="maximumValue">10000</stringProp>
+          <stringProp name="randomSeed"></stringProp>
+          <boolProp name="perThread">false</boolProp>
+        </RandomVariableConfig>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Create booking">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/bookings</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;propertyId&quot;: 1,&#xd;
+    &quot;hostId&quot;: 6,&#xd;
+    &quot;checkInDate&quot;: &quot;2026-04-03&quot;,&#xd;
+    &quot;checkOutDate&quot;: &quot;2026-04-10&quot;,&#xd;
+    &quot;totalAmount&quot;: 10000.00&#xd;
+  }</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Booking id extractor">
+            <stringProp name="JSONPostProcessor.referenceNames">bookingId</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Edit random product" enabled="false">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product/${randomProductId}</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;name&quot;: &quot;Smartphone X1 ${randomVar} updated&quot;,&#xd;
+    &quot;coordinates&quot;: {&#xd;
+      &quot;x&quot;: 100,&#xd;
+      &quot;y&quot;: 200.5&#xd;
+    },&#xd;
+    &quot;unitOfMeasure&quot;: &quot;CENTIMETERS&quot;,&#xd;
+    &quot;manufacturer&quot;: {&#xd;
+      &quot;name&quot;: &quot;Tech Innovations Inc&quot;,&#xd;
+      &quot;annualTurnover&quot;: 5000000,&#xd;
+      &quot;employeesCount&quot;: 250,&#xd;
+      &quot;rating&quot;: 5,&#xd;
+      &quot;type&quot;: &quot;PRIVATE_LIMITED_COMPANY&quot;,&#xd;
+      &quot;officialAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;123 Main Street&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10001&quot;&#xd;
+      },&#xd;
+      &quot;postalAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;123 Main Street&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10001&quot;&#xd;
+      }&#xd;
+    },&#xd;
+    &quot;price&quot;: 999.99,&#xd;
+    &quot;manufactureCost&quot;: 450.5,&#xd;
+    &quot;rating&quot;: 4.5,&#xd;
+    &quot;owner&quot;: {&#xd;
+      &quot;name&quot;: &quot;John Smith&quot;,&#xd;
+      &quot;eyeColor&quot;: &quot;BROWN&quot;,&#xd;
+      &quot;hairColor&quot;: &quot;BLACK&quot;,&#xd;
+      &quot;height&quot;: 180.5,&#xd;
+      &quot;nationality&quot;: &quot;USA&quot;,&#xd;
+      &quot;location&quot;: {&#xd;
+        &quot;x&quot;: 10.5,&#xd;
+        &quot;y&quot;: 20.3,&#xd;
+        &quot;name&quot;: &quot;Central Park&quot;&#xd;
+      }&#xd;
+    }&#xd;
+  }</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Delete random product" enabled="false">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product/${randomProductId}</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">DELETE</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Same product" enabled="true">
+        <intProp name="ThreadGroup.num_threads">10</intProp>
+        <intProp name="ThreadGroup.ramp_time">0</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Create same product" enabled="true">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;name&quot;: &quot;SAME_PRODUCT&quot;,&#xd;
+    &quot;coordinates&quot;: {&#xd;
+      &quot;x&quot;: 150,&#xd;
+      &quot;y&quot;: 300.7&#xd;
+    },&#xd;
+    &quot;unitOfMeasure&quot;: &quot;METERS&quot;,&#xd;
+    &quot;manufacturer&quot;: {&#xd;
+      &quot;name&quot;: &quot;Global Trade Corp&quot;,&#xd;
+      &quot;annualTurnover&quot;: 8000000,&#xd;
+      &quot;employeesCount&quot;: 500,&#xd;
+      &quot;rating&quot;: 4,&#xd;
+      &quot;type&quot;: &quot;PUBLIC&quot;,&#xd;
+      &quot;officialAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;456 Oak Avenue&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10002&quot;&#xd;
+      },&#xd;
+      &quot;postalAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;456 Oak Avenue&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10002&quot;&#xd;
+      }&#xd;
+    },&#xd;
+    &quot;price&quot;: 1499.99,&#xd;
+    &quot;manufactureCost&quot;: 800.0,&#xd;
+    &quot;rating&quot;: 4.8,&#xd;
+    &quot;owner&quot;: {&#xd;
+      &quot;name&quot;: &quot;Maria Garcia&quot;,&#xd;
+      &quot;eyeColor&quot;: &quot;GREEN&quot;,&#xd;
+      &quot;hairColor&quot;: &quot;BROWN&quot;,&#xd;
+      &quot;height&quot;: 165.2,&#xd;
+      &quot;nationality&quot;: &quot;FRANCE&quot;,&#xd;
+      &quot;location&quot;: {&#xd;
+        &quot;x&quot;: 15.2,&#xd;
+        &quot;y&quot;: 25.7,&#xd;
+        &quot;name&quot;: &quot;Downtown&quot;&#xd;
+      }&#xd;
+    }&#xd;
+  }</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Get same product" enabled="false">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product?filterField=name&amp;filterValue=SAME_PRODUCT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Product id extractor" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">sameProductId</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.content[0].id</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Edit same product" enabled="false">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product/${sameProductId}</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;name&quot;: &quot;SAME_PRODUCT updated&quot;,&#xd;
+    &quot;coordinates&quot;: {&#xd;
+      &quot;x&quot;: 150,&#xd;
+      &quot;y&quot;: 300.7&#xd;
+    },&#xd;
+    &quot;unitOfMeasure&quot;: &quot;METERS&quot;,&#xd;
+    &quot;manufacturer&quot;: {&#xd;
+      &quot;name&quot;: &quot;Global Trade Corp&quot;,&#xd;
+      &quot;annualTurnover&quot;: 8000000,&#xd;
+      &quot;employeesCount&quot;: 500,&#xd;
+      &quot;rating&quot;: 4,&#xd;
+      &quot;type&quot;: &quot;PUBLIC&quot;,&#xd;
+      &quot;officialAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;456 Oak Avenue&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10002&quot;&#xd;
+      },&#xd;
+      &quot;postalAddress&quot;: {&#xd;
+        &quot;street&quot;: &quot;456 Oak Avenue&quot;,&#xd;
+        &quot;zipCode&quot;: &quot;10002&quot;&#xd;
+      }&#xd;
+    },&#xd;
+    &quot;price&quot;: 1499.99,&#xd;
+    &quot;manufactureCost&quot;: 800.0,&#xd;
+    &quot;rating&quot;: 4.8,&#xd;
+    &quot;owner&quot;: {&#xd;
+      &quot;name&quot;: &quot;Maria Garcia&quot;,&#xd;
+      &quot;eyeColor&quot;: &quot;GREEN&quot;,&#xd;
+      &quot;hairColor&quot;: &quot;BROWN&quot;,&#xd;
+      &quot;height&quot;: 165.2,&#xd;
+      &quot;nationality&quot;: &quot;FRANCE&quot;,&#xd;
+      &quot;location&quot;: {&#xd;
+        &quot;x&quot;: 15.2,&#xd;
+        &quot;y&quot;: 25.7,&#xd;
+        &quot;name&quot;: &quot;Downtown&quot;&#xd;
+      }&#xd;
+    }&#xd;
+  }</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Delete same product" enabled="false">
+          <stringProp name="HTTPSampler.path">${BASE_PATH}/product/${sameProductId}</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">DELETE</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+      </hashTree>
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
