@@ -26,6 +26,7 @@ public class PropertyService {
             property.setHostId(hostId);
             property.setTitle(request.getTitle());
             property.setAddress(request.getAddress());
+            property.setBasePricePerDay(request.getBasePricePerDay());
             property.setActive(true);
 
             Property saved = propertyRepository.save(property);
@@ -36,6 +37,13 @@ public class PropertyService {
     @PreAuthorize("hasAuthority('PROPERTY_VIEW_HOST_LIST')")
     public List<PropertyResponse> getHostProperties(Long hostId) {
         return propertyRepository.findByHostId(hostId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @PreAuthorize("hasAuthority('PROPERTY_VIEW')")
+    public List<PropertyResponse> getAvailableProperties() {
+        return propertyRepository.findByActiveTrue().stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -61,6 +69,7 @@ public class PropertyService {
                 .hostId(property.getHostId())
                 .title(property.getTitle())
                 .address(property.getAddress())
+            .basePricePerDay(property.getBasePricePerDay())
                 .active(property.getActive())
                 .createdAt(property.getCreatedAt())
                 .updatedAt(property.getUpdatedAt())

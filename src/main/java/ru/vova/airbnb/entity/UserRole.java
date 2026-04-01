@@ -26,6 +26,8 @@ public enum UserRole {
     ADMIN(Set.of(
             Privilege.BOOKING_FORCE_STATUS,
             Privilege.BOOKING_SUPPORT_PROCESS,
+            Privilege.BOOKING_SUPPORT_REJECT,
+            Privilege.BOOKING_SUPPORT_LIST,
             Privilege.BOOKING_VIEW_ANY,
             Privilege.BOOKING_LIST_HOST,
             Privilege.BOOKING_LIST_GUEST,

@@ -16,6 +16,8 @@ public interface PropertyRepository extends JpaRepository<Property, Long> {
 
     List<Property> findByHostId(Long hostId);
 
+    List<Property> findByActiveTrue();
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Property p WHERE p.id = :id")
     Optional<Property> findByIdForUpdate(@Param("id") Long id);

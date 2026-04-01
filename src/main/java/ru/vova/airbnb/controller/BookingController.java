@@ -191,6 +191,30 @@ public class BookingController {
         return bookingService.processSupportRequest(id);
     }
 
+        @PostMapping("/{id}/support-request/reject")
+        @Operation(
+                        tags = {"Admin"},
+                        summary = "Reject support request",
+                        description = "Role: ADMIN. Rejects support request without cancelling booking."
+        )
+        public BookingResponse rejectSupportRequest(@PathVariable Long id) {
+                return bookingService.rejectSupportRequest(id);
+        }
+
+        @GetMapping("/support-requests")
+        @Operation(
+                        tags = {"Admin"},
+                        summary = "Get support requests",
+                        description = "Role: ADMIN. Returns paginated pending support requests."
+        )
+        public Page<BookingResponse> getSupportRequests(
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "10") int size,
+                        @RequestParam(defaultValue = "createdAt") String sortBy,
+                        @RequestParam(defaultValue = "DESC") String direction) {
+                return bookingService.getSupportRequests(page, size, sortBy, direction);
+        }
+
     @GetMapping("/{id}")
     @Operation(
             tags = {"Guest", "Host", "Admin"},

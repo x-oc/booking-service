@@ -42,6 +42,16 @@ public class PropertyController {
         return propertyService.getHostProperties(currentUser.getId());
     }
 
+    @GetMapping
+    @Operation(
+            tags = {"Guest", "Host", "Admin"},
+            summary = "Get available properties",
+            description = "Roles: GUEST/HOST/ADMIN. Returns active properties available for booking."
+    )
+    public List<PropertyResponse> getAvailableProperties() {
+        return propertyService.getAvailableProperties();
+    }
+
     @GetMapping("/{id}")
     @Operation(
             tags = {"Guest", "Host", "Admin"},

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -28,6 +29,9 @@ public class Property {
 
     @Column(nullable = false, length = 500)
     private String address;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal basePricePerDay;
 
     @Column(nullable = false)
     private Boolean active = true;

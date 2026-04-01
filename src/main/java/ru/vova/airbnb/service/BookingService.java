@@ -29,11 +29,10 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Random;
-import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -52,14 +51,13 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_CREATE')")
     public BookingResponse createBooking(BookingRequest request, Long guestId) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Creating booking for guest: {}", guestId);
 
             validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
             Property property = propertyService.lockPropertyForUpdate(request.getPropertyId());
             validatePropertyActive(property);
-            validateHostOwnsProperty(property, request.getHostId());
 
             if (bookingRepository.existsOverlappingBooking(
                     request.getPropertyId(),
@@ -72,6 +70,7 @@ public class BookingService {
             Booking booking = bookingMapper.toEntity(request);
             booking.setGuestId(guestId);
             booking.setHostId(property.getHostId());
+            booking.setTotalAmount(calculateTotalAmount(property, request.getCheckInDate(), request.getCheckOutDate()));
             booking.setStatus(BookingStatus.CREATED);
             booking.setRefundedAmount(BigDecimal.ZERO);
             booking.setSupportRequestInitiator(null);
@@ -91,11 +90,11 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_UPDATE')")
     public BookingResponse updateBooking(Long bookingId, BookingRequest request, Long guestId) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Guest {} updating booking: {}", guestId, bookingId);
             validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
             if (!booking.getGuestId().equals(guestId)) {
                 throw new BookingException("You don't have permission to update this booking");
             }
@@ -107,7 +106,6 @@ public class BookingService {
                     .findFirst()
                     .orElseThrow(() -> new BookingException("Property not found with id: " + request.getPropertyId()));
             validatePropertyActive(lockedTargetProperty);
-            validateHostOwnsProperty(lockedTargetProperty, request.getHostId());
 
             if (bookingRepository.existsOverlappingBookingExcludingId(
                     bookingId,
@@ -122,7 +120,7 @@ public class BookingService {
             booking.setHostId(lockedTargetProperty.getHostId());
             booking.setCheckInDate(request.getCheckInDate());
             booking.setCheckOutDate(request.getCheckOutDate());
-            booking.setTotalAmount(request.getTotalAmount());
+            booking.setTotalAmount(calculateTotalAmount(lockedTargetProperty, request.getCheckInDate(), request.getCheckOutDate()));
             booking.setStatus(BookingStatus.CREATED);
             booking.setPaymentDeadline(null);
             booking.setRefundedAmount(BigDecimal.ZERO);
@@ -142,10 +140,10 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_DELETE')")
     public void deleteBooking(Long bookingId, Long guestId) {
-        inTxVoid(() -> {
+        transactionTemplate.executeWithoutResult(status -> {
             log.info("Guest {} deleting booking: {}", guestId, bookingId);
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
             if (!booking.getGuestId().equals(guestId)) {
                 throw new BookingException("You don't have permission to delete this booking");
             }
@@ -163,10 +161,10 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_CONFIRM')")
     public BookingResponse confirmBooking(Long bookingId, Long hostId) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Host {} confirming booking: {}", hostId, bookingId);
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
             propertyService.lockPropertyForUpdate(booking.getPropertyId());
 
             if (!booking.getHostId().equals(hostId)) {
@@ -201,10 +199,10 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_REJECT')")
     public BookingResponse rejectBooking(Long bookingId, Long hostId) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Host {} rejecting booking: {}", hostId, bookingId);
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
 
             if (!booking.getHostId().equals(hostId)) {
                 throw new BookingException("You don't have permission to reject this booking");
@@ -227,10 +225,10 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_PAY')")
     public BookingResponse payForBooking(Long bookingId, Long guestId) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Guest {} paying for booking: {}", guestId, bookingId);
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
 
             if (!booking.getGuestId().equals(guestId)) {
                 throw new BookingException("You don't have permission to pay for this booking");
@@ -285,10 +283,10 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_FORCE_STATUS')")
     public BookingResponse forceChangeStatus(Long bookingId, BookingStatus newStatus) {
-        return inTx(() -> {
+        return transactionTemplate.execute(status -> {
             log.info("Admin forcing status change for booking: {} to {}", bookingId, newStatus);
 
-            Booking booking = findBookingById(bookingId);
+            Booking booking = findBookingByIdForUpdate(bookingId);
             BookingStatus previousStatus = booking.getStatus();
             validateAdminTransition(previousStatus, newStatus);
             booking.setStatus(newStatus);
@@ -317,8 +315,8 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_SUPPORT_REQUEST')")
     public BookingResponse requestSupportForPaidBooking(Long bookingId, UserDetailsImpl currentUser) {
-        return inTx(() -> {
-            Booking booking = findBookingById(bookingId);
+        return transactionTemplate.execute(status -> {
+            Booking booking = findBookingByIdForUpdate(bookingId);
             assertCanRequestSupport(booking, currentUser);
 
             if (booking.getSupportRequestInitiator() != null) {
@@ -343,8 +341,8 @@ public class BookingService {
 
     @PreAuthorize("hasAuthority('BOOKING_SUPPORT_PROCESS')")
     public BookingResponse processSupportRequest(Long bookingId) {
-        return inTx(() -> {
-            Booking booking = findBookingById(bookingId);
+        return transactionTemplate.execute(status -> {
+            Booking booking = findBookingByIdForUpdate(bookingId);
 
             if (booking.getSupportRequestInitiator() == null) {
                 throw new BookingException("Support request for this booking was not found");
@@ -382,8 +380,54 @@ public class BookingService {
         });
     }
 
+    @PreAuthorize("hasAuthority('BOOKING_SUPPORT_REJECT')")
+    public BookingResponse rejectSupportRequest(Long bookingId) {
+        return transactionTemplate.execute(status -> {
+            Booking booking = findBookingByIdForUpdate(bookingId);
+
+            if (booking.getSupportRequestInitiator() == null) {
+                throw new BookingException("Support request for this booking was not found");
+            }
+            if (booking.getStatus() != BookingStatus.PAID && booking.getStatus() != BookingStatus.ACTIVE) {
+                throw new BookingException("Support request can be rejected only for paid or active bookings");
+            }
+
+            SupportRequestInitiator initiator = booking.getSupportRequestInitiator();
+            booking.setSupportRequestInitiator(null);
+            booking.setSupportRequestedAt(null);
+            Booking updatedBooking = bookingRepository.save(booking);
+
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.guest(
+                            updatedBooking.getGuestId(),
+                            "Admin rejected support request for booking " + bookingId + "."
+                    )
+            );
+            applicationEventPublisher.publishEvent(
+                    BookingNotificationEvent.host(
+                            updatedBooking.getHostId(),
+                            "Admin rejected support request for booking " + bookingId + " from " + initiator + "."
+                    )
+            );
+
+            return bookingMapper.toResponse(updatedBooking);
+        });
+    }
+
+    @PreAuthorize("hasAuthority('BOOKING_SUPPORT_LIST')")
+    public Page<BookingResponse> getSupportRequests(int page,
+                                                    int size,
+                                                    String sortBy,
+                                                    String direction) {
+        Pageable pageable = buildEntityPageable(page, size, sortBy, direction);
+        return bookingRepository.findSupportRequests(
+                Arrays.asList(BookingStatus.PAID, BookingStatus.ACTIVE),
+                pageable
+        ).map(bookingMapper::toResponse);
+    }
+
     public void cancelExpiredPayments() {
-        inTxVoid(() -> {
+        transactionTemplate.executeWithoutResult(status -> {
             log.info("Checking for expired payments");
 
             List<Booking> expiredBookings = bookingRepository
@@ -416,7 +460,7 @@ public class BookingService {
     }
 
     public void completeStays() {
-        inTxVoid(() -> {
+        transactionTemplate.executeWithoutResult(status -> {
             log.info("Checking for completed stays");
 
             List<Booking> completedBookings = bookingRepository
@@ -426,18 +470,19 @@ public class BookingService {
                     );
 
             for (Booking booking : completedBookings) {
-                validateTransition(booking.getStatus(), BookingStatus.COMPLETED);
-                booking.setStatus(BookingStatus.COMPLETED);
-                bookingRepository.save(booking);
+                Booking lockedBooking = findBookingByIdForUpdate(booking.getId());
+                validateTransition(lockedBooking.getStatus(), BookingStatus.COMPLETED);
+                lockedBooking.setStatus(BookingStatus.COMPLETED);
+                bookingRepository.save(lockedBooking);
                 applicationEventPublisher.publishEvent(
                         BookingNotificationEvent.guest(
-                                booking.getGuestId(),
+                        lockedBooking.getGuestId(),
                                 "Your stay has been completed. Thank you for choosing us!"
                         )
                 );
                 applicationEventPublisher.publishEvent(
                         BookingNotificationEvent.host(
-                                booking.getHostId(),
+                        lockedBooking.getHostId(),
                                 "Guest stay completed. Payment will be processed soon."
                         )
                 );
@@ -450,7 +495,7 @@ public class BookingService {
     }
 
     public void activateDueBookings() {
-        inTxVoid(() -> {
+        transactionTemplate.executeWithoutResult(status -> {
             log.info("Activating paid bookings with check-in date today or earlier");
 
             List<Booking> bookingsToActivate = bookingRepository
@@ -460,7 +505,8 @@ public class BookingService {
                     );
 
             for (Booking booking : bookingsToActivate) {
-                activateBooking(booking);
+                Booking lockedBooking = findBookingByIdForUpdate(booking.getId());
+                activateBooking(lockedBooking);
             }
 
             if (!bookingsToActivate.isEmpty()) {
@@ -522,6 +568,11 @@ public class BookingService {
 
     private Booking findBookingById(Long bookingId) {
         return bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BookingException("Booking not found with id: " + bookingId));
+    }
+
+    private Booking findBookingByIdForUpdate(Long bookingId) {
+        return bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BookingException("Booking not found with id: " + bookingId));
     }
 
@@ -595,6 +646,17 @@ public class BookingService {
         return PageRequest.of(page, size, Sort.by(sortDirection, dbColumnName));
     }
 
+    private Pageable buildEntityPageable(int page, int size, String sortBy, String direction) {
+        Sort.Direction sortDirection;
+        try {
+            sortDirection = Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException ex) {
+            throw new BookingException("Invalid sort direction. Use ASC or DESC.");
+        }
+        String entityField = mapFieldToEntityField(sortBy);
+        return PageRequest.of(page, size, Sort.by(sortDirection, entityField));
+    }
+
     private String mapFieldToColumn(String fieldName) {
         return switch (fieldName) {
             case "createdAt" -> "created_at";
@@ -610,6 +672,25 @@ public class BookingService {
             case "refundedAmount" -> "refunded_amount";
             case "supportRequestInitiator" -> "support_request_initiator";
             case "supportRequestedAt" -> "support_requested_at";
+            default -> throw new BookingException("Unsupported sortBy field: " + fieldName);
+        };
+    }
+
+    private String mapFieldToEntityField(String fieldName) {
+        return switch (fieldName) {
+            case "createdAt",
+                 "updatedAt",
+                 "guestId",
+                 "hostId",
+                 "propertyId",
+                 "status",
+                 "checkInDate",
+                 "checkOutDate",
+                 "paymentDeadline",
+                 "totalAmount",
+                 "refundedAmount",
+                 "supportRequestInitiator",
+                 "supportRequestedAt" -> fieldName;
             default -> throw new BookingException("Unsupported sortBy field: " + fieldName);
         };
     }
@@ -634,12 +715,6 @@ public class BookingService {
         }
     }
 
-    private void validateHostOwnsProperty(Property property, Long hostIdFromRequest) {
-        if (!property.getHostId().equals(hostIdFromRequest)) {
-            throw new BookingException("Host id in request does not match property owner");
-        }
-    }
-
     private List<Property> lockPropertiesForUpdate(Long firstPropertyId, Long secondPropertyId) {
         if (firstPropertyId.equals(secondPropertyId)) {
             return List.of(propertyService.lockPropertyForUpdate(firstPropertyId));
@@ -649,6 +724,16 @@ public class BookingService {
         Property first = propertyService.lockPropertyForUpdate(low);
         Property second = propertyService.lockPropertyForUpdate(high);
         return List.of(first, second);
+    }
+
+    private BigDecimal calculateTotalAmount(Property property, LocalDate checkInDate, LocalDate checkOutDate) {
+        long days = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
+        if (days <= 0) {
+            throw new BookingException("Check-out date must be after check-in date");
+        }
+        return property.getBasePricePerDay()
+                .multiply(BigDecimal.valueOf(days))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private void activateBooking(Booking booking) {
@@ -669,11 +754,4 @@ public class BookingService {
         );
     }
 
-    private <T> T inTx(Supplier<T> action) {
-        return Objects.requireNonNull(transactionTemplate.execute(status -> action.get()));
-    }
-
-    private void inTxVoid(Runnable action) {
-        transactionTemplate.executeWithoutResult(status -> action.run());
-    }
 }

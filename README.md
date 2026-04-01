@@ -41,7 +41,7 @@ java -jar app.jar
 Ключевые привилегии:
 - `BOOKING_CREATE`, `BOOKING_UPDATE`, `BOOKING_DELETE`, `BOOKING_PAY`
 - `BOOKING_CONFIRM`, `BOOKING_REJECT`
-- `BOOKING_FORCE_STATUS`, `BOOKING_SUPPORT_PROCESS`
+- `BOOKING_FORCE_STATUS`, `BOOKING_SUPPORT_PROCESS`, `BOOKING_SUPPORT_REJECT`, `BOOKING_SUPPORT_LIST`
 - `BOOKING_SUPPORT_REQUEST`, `BOOKING_VIEW_OWN`, `BOOKING_VIEW_ANY`
 - `BOOKING_LIST_HOST`, `BOOKING_LIST_GUEST`
 - `PROPERTY_CREATE`, `PROPERTY_VIEW`, `PROPERTY_VIEW_HOST_LIST`
@@ -53,3 +53,11 @@ java -jar app.jar
 - Для управления транзакциями используется Spring JTA + Atomikos.
 - Границы бизнес-транзакций реализованы программно через `TransactionTemplate`.
 - Программные транзакции используются в основных прецедентах (создание/изменение/подтверждение/оплата/админ-обработка бронирований и т.д.).
+
+## Модель цены бронирования
+
+- В `Property` хранится `basePricePerDay`.
+- В `BookingRequest` гость передает только `propertyId`, `checkInDate`, `checkOutDate`.
+- `hostId` и `totalAmount` вычисляются на сервере:
+	- `hostId` берется из владельца выбранного объекта.
+	- `totalAmount = basePricePerDay * количество_дней`.

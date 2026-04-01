@@ -112,25 +112,26 @@ create_property() {
   local host_token="$1"
   local title="$2"
   local address="$3"
+  local base_price="$4"
   local response
   response=$(curl -s -X POST ${BASE_URL}/api/v1/properties \
     -H "Content-Type: ${CONTENT_TYPE}" \
     -H "Authorization: Bearer ${host_token}" \
-    -d "{\"title\":\"${title}\",\"address\":\"${address}\"}")
+    -d "{\"title\":\"${title}\",\"address\":\"${address}\",\"basePricePerDay\":${base_price}}")
   extract_property_id "$response"
 }
 
-PROP1=$(create_property "${HOST1_TOKEN}" "Host1 Loft A" "Nevsky 1, Saint-Petersburg")
-PROP2=$(create_property "${HOST2_TOKEN}" "Host2 Studio A" "Rubinshteina 12, Saint-Petersburg")
-PROP3=$(create_property "${HOST3_TOKEN}" "Host3 Flat A" "Liteyny 8, Saint-Petersburg")
-PROP4=$(create_property "${HOST1_TOKEN}" "Host1 Loft B" "Nevsky 15, Saint-Petersburg")
-PROP5=$(create_property "${HOST2_TOKEN}" "Host2 Studio B" "Rubinshteina 20, Saint-Petersburg")
-PROP6=$(create_property "${HOST3_TOKEN}" "Host3 Flat B" "Liteyny 30, Saint-Petersburg")
-PROP7=$(create_property "${HOST4_TOKEN}" "Host4 Apt A" "Fontanka 5, Saint-Petersburg")
-PROP8=$(create_property "${HOST4_TOKEN}" "Host4 Apt B" "Fontanka 11, Saint-Petersburg")
-PROP9=$(create_property "${HOST5_TOKEN}" "Host5 House A" "Petrogradskaya 22, Saint-Petersburg")
-PROP10=$(create_property "${HOST5_TOKEN}" "Host5 House B" "Petrogradskaya 35, Saint-Petersburg")
-PROP11=$(create_property "${HOST1_TOKEN}" "Host1 Loft C" "Nevsky 44, Saint-Petersburg")
+PROP1=$(create_property "${HOST1_TOKEN}" "Host1 Loft A" "Nevsky 1, Saint-Petersburg" 1250.00)
+PROP2=$(create_property "${HOST2_TOKEN}" "Host2 Studio A" "Rubinshteina 12, Saint-Petersburg" 1600.00)
+PROP3=$(create_property "${HOST3_TOKEN}" "Host3 Flat A" "Liteyny 8, Saint-Petersburg" 1800.00)
+PROP4=$(create_property "${HOST1_TOKEN}" "Host1 Loft B" "Nevsky 15, Saint-Petersburg" 1500.00)
+PROP5=$(create_property "${HOST2_TOKEN}" "Host2 Studio B" "Rubinshteina 20, Saint-Petersburg" 1900.00)
+PROP6=$(create_property "${HOST3_TOKEN}" "Host3 Flat B" "Liteyny 30, Saint-Petersburg" 1400.00)
+PROP7=$(create_property "${HOST4_TOKEN}" "Host4 Apt A" "Fontanka 5, Saint-Petersburg" 2000.00)
+PROP8=$(create_property "${HOST4_TOKEN}" "Host4 Apt B" "Fontanka 11, Saint-Petersburg" 1100.00)
+PROP9=$(create_property "${HOST5_TOKEN}" "Host5 House A" "Petrogradskaya 22, Saint-Petersburg" 1300.00)
+PROP10=$(create_property "${HOST5_TOKEN}" "Host5 House B" "Petrogradskaya 35, Saint-Petersburg" 1500.00)
+PROP11=$(create_property "${HOST1_TOKEN}" "Host1 Loft C" "Nevsky 44, Saint-Petersburg" 1700.00)
 
 echo "Property IDs: $PROP1, $PROP2, $PROP3, $PROP4, $PROP5, $PROP6, $PROP7, $PROP8, $PROP9, $PROP10, $PROP11"
 
@@ -147,21 +148,21 @@ echo "Guest1 создает бронирования..."
 BOOKING1_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST1_TOKEN}" \
-  -d "{\"propertyId\": ${PROP1}, \"hostId\": ${HOST1_ID}, \"checkInDate\": \"2026-03-01\", \"checkOutDate\": \"2026-03-05\", \"totalAmount\": 5000.00}")
+  -d "{\"propertyId\": ${PROP1}, \"checkInDate\": \"2026-03-01\", \"checkOutDate\": \"2026-03-05\"}")
 BOOKING1=$(extract_booking_id "$BOOKING1_RESPONSE")
 echo "  Created booking $BOOKING1"
 
 BOOKING2_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST1_TOKEN}" \
-  -d "{\"propertyId\": ${PROP2}, \"hostId\": ${HOST2_ID}, \"checkInDate\": \"2026-03-10\", \"checkOutDate\": \"2026-03-15\", \"totalAmount\": 8000.00}")
+  -d "{\"propertyId\": ${PROP2}, \"checkInDate\": \"2026-03-10\", \"checkOutDate\": \"2026-03-15\"}")
 BOOKING2=$(extract_booking_id "$BOOKING2_RESPONSE")
 echo "  Created booking $BOOKING2"
 
 BOOKING3_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST1_TOKEN}" \
-  -d "{\"propertyId\": ${PROP3}, \"hostId\": ${HOST3_ID}, \"checkInDate\": \"2026-04-01\", \"checkOutDate\": \"2026-04-07\", \"totalAmount\": 12000.00}")
+  -d "{\"propertyId\": ${PROP3}, \"checkInDate\": \"2026-04-01\", \"checkOutDate\": \"2026-04-07\"}")
 BOOKING3=$(extract_booking_id "$BOOKING3_RESPONSE")
 echo "  Created booking $BOOKING3"
 
@@ -170,14 +171,14 @@ echo "Guest2 создает бронирования..."
 BOOKING4_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST2_TOKEN}" \
-  -d "{\"propertyId\": ${PROP4}, \"hostId\": ${HOST1_ID}, \"checkInDate\": \"2026-03-20\", \"checkOutDate\": \"2026-03-25\", \"totalAmount\": 6000.00}")
+  -d "{\"propertyId\": ${PROP4}, \"checkInDate\": \"2026-03-20\", \"checkOutDate\": \"2026-03-25\"}")
 BOOKING4=$(extract_booking_id "$BOOKING4_RESPONSE")
 echo "  Created booking $BOOKING4"
 
 BOOKING5_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST2_TOKEN}" \
-  -d "{\"propertyId\": ${PROP5}, \"hostId\": ${HOST2_ID}, \"checkInDate\": \"2026-04-10\", \"checkOutDate\": \"2026-04-15\", \"totalAmount\": 9000.00}")
+  -d "{\"propertyId\": ${PROP5}, \"checkInDate\": \"2026-04-10\", \"checkOutDate\": \"2026-04-15\"}")
 BOOKING5=$(extract_booking_id "$BOOKING5_RESPONSE")
 echo "  Created booking $BOOKING5"
 
@@ -186,14 +187,14 @@ echo "Guest3 создает бронирования..."
 BOOKING6_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST3_TOKEN}" \
-  -d "{\"propertyId\": ${PROP6}, \"hostId\": ${HOST3_ID}, \"checkInDate\": \"2026-03-15\", \"checkOutDate\": \"2026-03-20\", \"totalAmount\": 7000.00}")
+  -d "{\"propertyId\": ${PROP6}, \"checkInDate\": \"2026-03-15\", \"checkOutDate\": \"2026-03-20\"}")
 BOOKING6=$(extract_booking_id "$BOOKING6_RESPONSE")
 echo "  Created booking $BOOKING6"
 
 BOOKING7_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST3_TOKEN}" \
-  -d "{\"propertyId\": ${PROP7}, \"hostId\": ${HOST4_ID}, \"checkInDate\": \"2026-04-20\", \"checkOutDate\": \"2026-04-25\", \"totalAmount\": 10000.00}")
+  -d "{\"propertyId\": ${PROP7}, \"checkInDate\": \"2026-04-20\", \"checkOutDate\": \"2026-04-25\"}")
 BOOKING7=$(extract_booking_id "$BOOKING7_RESPONSE")
 echo "  Created booking $BOOKING7"
 
@@ -202,14 +203,14 @@ echo "Guest4 создает бронирования..."
 BOOKING8_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST4_TOKEN}" \
-  -d "{\"propertyId\": ${PROP8}, \"hostId\": ${HOST4_ID}, \"checkInDate\": \"2026-03-25\", \"checkOutDate\": \"2026-03-30\", \"totalAmount\": 5500.00}")
+  -d "{\"propertyId\": ${PROP8}, \"checkInDate\": \"2026-03-25\", \"checkOutDate\": \"2026-03-30\"}")
 BOOKING8=$(extract_booking_id "$BOOKING8_RESPONSE")
 echo "  Created booking $BOOKING8"
 
 BOOKING9_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST4_TOKEN}" \
-  -d "{\"propertyId\": ${PROP9}, \"hostId\": ${HOST5_ID}, \"checkInDate\": \"2026-05-01\", \"checkOutDate\": \"2026-05-05\", \"totalAmount\": 6500.00}")
+  -d "{\"propertyId\": ${PROP9}, \"checkInDate\": \"2026-05-01\", \"checkOutDate\": \"2026-05-05\"}")
 BOOKING9=$(extract_booking_id "$BOOKING9_RESPONSE")
 echo "  Created booking $BOOKING9"
 
@@ -218,14 +219,14 @@ echo "Guest5 создает бронирования..."
 BOOKING10_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST5_TOKEN}" \
-  -d "{\"propertyId\": ${PROP10}, \"hostId\": ${HOST5_ID}, \"checkInDate\": \"2026-04-05\", \"checkOutDate\": \"2026-04-10\", \"totalAmount\": 7500.00}")
+  -d "{\"propertyId\": ${PROP10}, \"checkInDate\": \"2026-04-05\", \"checkOutDate\": \"2026-04-10\"}")
 BOOKING10=$(extract_booking_id "$BOOKING10_RESPONSE")
 echo "  Created booking $BOOKING10"
 
 BOOKING11_RESPONSE=$(curl -s -X POST ${BASE_URL}/api/v1/bookings \
   -H "Content-Type: ${CONTENT_TYPE}" \
   -H "Authorization: Bearer ${GUEST5_TOKEN}" \
-  -d "{\"propertyId\": ${PROP11}, \"hostId\": ${HOST1_ID}, \"checkInDate\": \"2026-05-10\", \"checkOutDate\": \"2026-05-15\", \"totalAmount\": 8500.00}")
+  -d "{\"propertyId\": ${PROP11}, \"checkInDate\": \"2026-05-10\", \"checkOutDate\": \"2026-05-15\"}")
 BOOKING11=$(extract_booking_id "$BOOKING11_RESPONSE")
 echo "  Created booking $BOOKING11"
 
@@ -360,5 +361,6 @@ echo "Теперь можно тестировать фильтрацию:"
 echo "  - GET /api/v1/bookings/host?guestId=1&status=PAID"
 echo "  - GET /api/v1/bookings/guest?hostId=1&date=2026-03-03"
 echo "  - GET /api/v1/bookings/host?guestEmail=guest1@test.com&date=2026-03-02"
+
 
 

@@ -15,6 +15,7 @@ public class TransactionConfig {
 
     @Bean(initMethod = "init", destroyMethod = "close")
     public UserTransactionManager atomikosTransactionManager() {
+        System.setProperty("com.atomikos.icatch.log_base_dir", "build/atomikos");
         UserTransactionManager transactionManager = new UserTransactionManager();
         transactionManager.setForceShutdown(false);
         return transactionManager;

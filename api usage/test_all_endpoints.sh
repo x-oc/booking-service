@@ -127,30 +127,31 @@ echo "  host2:  id=${HOST2_ID}, token_len=${#HOST2_TOKEN}"
 
 # -------------------- PROPERTIES --------------------
 call_api "PROPERTIES create property #1 by host" "POST" "${BASE_URL}/api/v1/properties" "${HOST_TOKEN}" \
-  "{\"title\":\"Loft Test 1\",\"address\":\"Nevsky 100\"}"
+  "{\"title\":\"Loft Test 1\",\"address\":\"Nevsky 100\",\"basePricePerDay\":2000.00}"
 PROPERTY_ID=$(extract_json_number "$LAST_BODY" "id")
 
 call_api "PROPERTIES create property #2 by host2" "POST" "${BASE_URL}/api/v1/properties" "${HOST2_TOKEN}" \
-  "{\"title\":\"Studio Test 2\",\"address\":\"Rubinshteina 20\"}"
+  "{\"title\":\"Studio Test 2\",\"address\":\"Rubinshteina 20\",\"basePricePerDay\":1800.00}"
 PROPERTY2_ID=$(extract_json_number "$LAST_BODY" "id")
 
 call_api "PROPERTIES get current host properties" "GET" "${BASE_URL}/api/v1/properties/host" "${HOST_TOKEN}" ""
+call_api "PROPERTIES get available properties" "GET" "${BASE_URL}/api/v1/properties" "${GUEST_TOKEN}" ""
 call_api "PROPERTIES get property by id" "GET" "${BASE_URL}/api/v1/properties/${PROPERTY_ID}" "${GUEST_TOKEN}" ""
 
 # -------------------- BOOKINGS --------------------
 # create booking (main flow)
 call_api "BOOKINGS create #1 (guest -> host)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY_ID},\"hostId\":${HOST_ID},\"checkInDate\":\"2026-04-10\",\"checkOutDate\":\"2026-04-15\",\"totalAmount\":10000.00}"
+  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"2026-04-10\",\"checkOutDate\":\"2026-04-15\"}"
 BOOKING_ID=$(extract_json_number "$LAST_BODY" "id")
 
 # create booking for reject flow
 call_api "BOOKINGS create #2 (will reject)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST2_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"hostId\":${HOST2_ID},\"checkInDate\":\"2026-05-01\",\"checkOutDate\":\"2026-05-05\",\"totalAmount\":7000.00}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-05-01\",\"checkOutDate\":\"2026-05-05\"}"
 BOOKING2_ID=$(extract_json_number "$LAST_BODY" "id")
 
 # create mutable booking for update/delete
 call_api "BOOKINGS create #3 (for update/delete)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"hostId\":${HOST2_ID},\"checkInDate\":\"2026-06-01\",\"checkOutDate\":\"2026-06-06\",\"totalAmount\":9000.00}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-06-01\",\"checkOutDate\":\"2026-06-06\"}"
 BOOKING3_ID=$(extract_json_number "$LAST_BODY" "id")
 
 # -------------------- ACCESS NEGATIVE CHECKS (expected 403) --------------------
@@ -158,10 +159,10 @@ call_api "SECURITY host cannot pay booking (expected 403)" "POST" "${BASE_URL}/a
 call_api "SECURITY guest cannot force status (expected 403)" "PATCH" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/force-status" "${GUEST_TOKEN}" \
   "{\"status\":\"FORCED_COMPLETED\"}"
 call_api "SECURITY admin cannot create booking as guest flow (expected 403)" "POST" "${BASE_URL}/api/v1/bookings" "${ADMIN_TOKEN}" \
-  "{\"propertyId\":${PROPERTY_ID},\"hostId\":${HOST_ID},\"checkInDate\":\"2026-07-01\",\"checkOutDate\":\"2026-07-05\",\"totalAmount\":5000.00}"
+  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"2026-07-01\",\"checkOutDate\":\"2026-07-05\"}"
 
 call_api "BOOKINGS update #3 by guest" "PUT" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"hostId\":${HOST2_ID},\"checkInDate\":\"2026-06-02\",\"checkOutDate\":\"2026-06-07\",\"totalAmount\":9500.00}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-06-02\",\"checkOutDate\":\"2026-06-07\"}"
 call_api "BOOKINGS delete #3 by guest" "DELETE" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" ""
 
 call_api "BOOKINGS get by id #1 (guest)" "GET" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}" "${GUEST_TOKEN}" ""
@@ -172,6 +173,9 @@ call_api "BOOKINGS reject #2 by host2" "PATCH" "${BASE_URL}/api/v1/bookings/${BO
 
 # support request flow (requires paid/active status, so we try after pay)
 call_api "BOOKINGS support request #1 by guest" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request" "${GUEST_TOKEN}" ""
+call_api "BOOKINGS support requests list by admin" "GET" "${BASE_URL}/api/v1/bookings/support-requests?page=0&size=10&sortBy=createdAt&direction=DESC" "${ADMIN_TOKEN}" ""
+call_api "BOOKINGS support request reject #1 by admin" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request/reject" "${ADMIN_TOKEN}" ""
+call_api "BOOKINGS support request #1 by guest (again)" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request" "${GUEST_TOKEN}" ""
 call_api "BOOKINGS support request process #1 by admin" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/support-request/process" "${ADMIN_TOKEN}" ""
 
 # force status flow (admin)
@@ -189,5 +193,6 @@ call_api "BOOKINGS /guest filter by hostEmail" "GET" "${BASE_URL}/api/v1/booking
 
 print_block "DONE"
 echo "Script finished. Review response codes/bodies above."
+
 
 

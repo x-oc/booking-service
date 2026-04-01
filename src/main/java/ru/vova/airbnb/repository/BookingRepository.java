@@ -2,9 +2,11 @@ package ru.vova.airbnb.repository;
 
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,10 @@ import java.util.List;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
+
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT b FROM Booking b WHERE b.id = :id")
+        java.util.Optional<Booking> findByIdForUpdate(@Param("id") Long id);
 
     List<Booking> findByStatusAndPaymentDeadlineBefore(BookingStatus status, LocalDateTime now);
 
@@ -77,5 +83,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                                 @Param("checkIn") LocalDate checkIn,
                                                 @Param("checkOut") LocalDate checkOut,
                                                 @Param("statuses") List<BookingStatus> statuses);
+
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.supportRequestInitiator IS NOT NULL " +
+            "AND b.status IN :statuses")
+    Page<Booking> findSupportRequests(@Param("statuses") List<BookingStatus> statuses,
+                                      Pageable pageable);
 
 }
