@@ -3,6 +3,7 @@ package ru.vova.airbnb.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
+import ru.vova.airbnb.controller.dto.DistributedTxProbeRequest;
 import ru.vova.airbnb.controller.dto.StatusUpdateRequest;
 import ru.vova.airbnb.entity.BookingStatus;
 import ru.vova.airbnb.security.jwt.UserDetailsImpl;
@@ -213,6 +214,22 @@ public class BookingController {
                         @RequestParam(defaultValue = "createdAt") String sortBy,
                         @RequestParam(defaultValue = "DESC") String direction) {
                 return bookingService.getSupportRequests(page, size, sortBy, direction);
+        }
+
+        @PostMapping("/admin/tx-probe")
+        @Operation(
+                        tags = {"Admin"},
+                        summary = "Run distributed transaction probe",
+                        description = "Role: ADMIN. Writes into property/core databases in one global transaction and can force rollback."
+        )
+        public String runDistributedTxProbe(@Valid @RequestBody DistributedTxProbeRequest request) {
+                boolean forceFailure = request.getForceFailure() == null || request.getForceFailure();
+                return bookingService.runDistributedTxProbe(
+                                request.getHostId(),
+                                request.getGuestId(),
+                                forceFailure,
+                                request.getProbeKey()
+                );
         }
 
     @GetMapping("/{id}")

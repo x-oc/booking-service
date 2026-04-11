@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gradle
+build
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+api usage
+jmeter
+*.png
+*.docx

@@ -1,18 +1,22 @@
-spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-    show-sql: false
-
 app:
+  datasource:
+    core:
+      xa-class-name: org.h2.jdbcx.JdbcDataSource
+      url: jdbc:h2:mem:coredb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+      username: sa
+      password:
+    property:
+      xa-class-name: org.h2.jdbcx.JdbcDataSource
+      url: jdbc:h2:mem:propertydb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+      username: sa
+      password:
+  jpa:
+    ddl-auto: create-drop
+    show-sql: false
+    format-sql: false
+    jdbc-time-zone: Europe/Moscow
+    dialect: org.hibernate.dialect.H2Dialect
+
   jwt:
     secret: testSecretKeyForJwtGenerationMustBeLongEnough12345
     expiration-ms: 86400000

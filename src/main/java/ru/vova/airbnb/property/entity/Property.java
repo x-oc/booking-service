@@ -1,4 +1,4 @@
-package ru.vova.airbnb.entity;
+package ru.vova.airbnb.property.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -44,4 +44,3 @@ public class Property {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 }
-

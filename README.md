@@ -4,9 +4,12 @@
 
 ### 2. Настройте окружение (.env) и введите свои данные
 ```
-DB_URL=
-DB_USERNAME=
-DB_PASSWORD=
+CORE_DB_URL=jdbc:postgresql://localhost:5433/airbnb_core
+CORE_DB_USERNAME=airbnb
+CORE_DB_PASSWORD=airbnb
+PROPERTY_DB_URL=jdbc:postgresql://localhost:5434/airbnb_property
+PROPERTY_DB_USERNAME=airbnb
+PROPERTY_DB_PASSWORD=airbnb
 JWT_SECRET=superSecretKeyHereSuperSecretKeyHereSuperSecretKeyHereSuperSecretKeyHere
 JWT_EXPIRATION_MS=86400000
 ```
@@ -31,6 +34,29 @@ java -jar app.jar
 ## После запуска доступны:
 - 📚 http://localhost:28800/swagger-ui.html API документация
 
+## Docker Compose (2 БД + приложение)
+
+В репозитории есть `docker-compose.yml` с тремя сервисами:
+- `db-core`: БД для `bookings` и `users`
+- `db-property`: отдельная БД для `properties`
+- `app`: Spring Boot приложение
+
+Запуск:
+```
+docker compose up --build -d
+```
+
+Если ранее БД уже поднимались на старой схеме, перед повторным запуском выполните:
+```
+docker compose down -v
+docker compose up --build -d
+```
+
+Остановка:
+```
+docker compose down
+```
+
 ## Модель доступа (RBAC + privileges)
 
 Роли в системе:
@@ -53,6 +79,47 @@ java -jar app.jar
 - Для управления транзакциями используется Spring JTA + Atomikos.
 - Границы бизнес-транзакций реализованы программно через `TransactionTemplate`.
 - Программные транзакции используются в основных прецедентах (создание/изменение/подтверждение/оплата/админ-обработка бронирований и т.д.).
+- `properties` вынесены в отдельную БД; операции, затрагивающие обе БД, выполняются как распределенные XA-транзакции.
+
+### Проверка распределенного rollback
+
+Добавлен admin endpoint:
+- `POST /api/v1/bookings/admin/tx-probe`
+
+Пример body:
+```json
+{
+	"hostId": 2,
+	"guestId": 1,
+	"forceFailure": true
+}
+```
+
+Что делает probe:
+- пишет `Property` в property-БД,
+- пишет `Booking` в core-БД,
+- при `forceFailure=true` бросает исключение после двух записей.
+
+Ожидание:
+- обе записи откатываются (в обеих БД не остаётся `TX_PROBE_*` данных).
+
+Проверка недоступности одной БД:
+1. Остановить, например, core БД: `docker compose stop db-core`.
+2. Вызвать probe endpoint с `forceFailure=false`.
+3. Поднять core БД обратно: `docker compose start db-core`.
+4. Проверить в property БД, что `TX_PROBE_*` запись не сохранилась (rollback сработал).
+
+### Автоматизированная проверка (понятный PASS/FAIL)
+
+Готовый скрипт запускает три сценария:
+- успешный commit в обе БД,
+- forced rollback,
+- rollback при недоступной core БД.
+
+Запуск:
+```
+bash "api usage/test_distributed_tx.sh"
+```
 
 ## Модель цены бронирования
 

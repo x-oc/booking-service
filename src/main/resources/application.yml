@@ -5,26 +5,6 @@ spring:
   application:
     name: airbnb
 
-  datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        transaction:
-          coordinator_class: jta
-          jta:
-            platform: org.hibernate.engine.transaction.jta.platform.internal.AtomikosJtaPlatform
-        jdbc:
-          time_zone: Europe/Moscow
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-    show-sql: true
   servlet:
     encoding:
       charset: UTF-8
@@ -35,6 +15,23 @@ spring:
     time-zone: Europe/Moscow
 
 app:
+  datasource:
+    core:
+      xa-class-name: org.postgresql.xa.PGXADataSource
+      url: ${CORE_DB_URL:jdbc:postgresql://localhost:5433/airbnb_core}
+      username: ${CORE_DB_USERNAME:airbnb}
+      password: ${CORE_DB_PASSWORD:airbnb}
+    property:
+      xa-class-name: org.postgresql.xa.PGXADataSource
+      url: ${PROPERTY_DB_URL:jdbc:postgresql://localhost:5434/airbnb_property}
+      username: ${PROPERTY_DB_USERNAME:airbnb}
+      password: ${PROPERTY_DB_PASSWORD:airbnb}
+  jpa:
+    ddl-auto: update
+    show-sql: true
+    format-sql: true
+    jdbc-time-zone: Europe/Moscow
+    dialect: org.hibernate.dialect.PostgreSQLDialect
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS}

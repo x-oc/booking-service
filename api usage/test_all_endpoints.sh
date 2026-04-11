@@ -15,6 +15,31 @@ HOST2_EMAIL="host2_${timestamp}@test.com"
 TMP_BODY_FILE=$(mktemp)
 trap 'rm -f "$TMP_BODY_FILE"' EXIT
 
+date_plus() {
+  local days="$1"
+  date -d "+${days} days" +%F
+}
+
+require_id() {
+  local id_value="$1"
+  local label="$2"
+  if [ -z "$id_value" ]; then
+    echo "ERROR: ${label} is empty. Previous response: ${LAST_BODY}"
+    exit 1
+  fi
+}
+
+BOOKING1_CHECKIN=$(date_plus 7)
+BOOKING1_CHECKOUT=$(date_plus 12)
+BOOKING2_CHECKIN=$(date_plus 20)
+BOOKING2_CHECKOUT=$(date_plus 24)
+BOOKING3_CHECKIN=$(date_plus 30)
+BOOKING3_CHECKOUT=$(date_plus 35)
+BOOKING3_UPDATE_CHECKIN=$(date_plus 31)
+BOOKING3_UPDATE_CHECKOUT=$(date_plus 36)
+BOOKING_ADMIN_NEG_CHECKIN=$(date_plus 40)
+BOOKING_ADMIN_NEG_CHECKOUT=$(date_plus 44)
+
 print_block() {
   echo ""
   echo "============================================================"
@@ -129,10 +154,12 @@ echo "  host2:  id=${HOST2_ID}, token_len=${#HOST2_TOKEN}"
 call_api "PROPERTIES create property #1 by host" "POST" "${BASE_URL}/api/v1/properties" "${HOST_TOKEN}" \
   "{\"title\":\"Loft Test 1\",\"address\":\"Nevsky 100\",\"basePricePerDay\":2000.00}"
 PROPERTY_ID=$(extract_json_number "$LAST_BODY" "id")
+require_id "$PROPERTY_ID" "PROPERTY_ID"
 
 call_api "PROPERTIES create property #2 by host2" "POST" "${BASE_URL}/api/v1/properties" "${HOST2_TOKEN}" \
   "{\"title\":\"Studio Test 2\",\"address\":\"Rubinshteina 20\",\"basePricePerDay\":1800.00}"
 PROPERTY2_ID=$(extract_json_number "$LAST_BODY" "id")
+require_id "$PROPERTY2_ID" "PROPERTY2_ID"
 
 call_api "PROPERTIES get current host properties" "GET" "${BASE_URL}/api/v1/properties/host" "${HOST_TOKEN}" ""
 call_api "PROPERTIES get available properties" "GET" "${BASE_URL}/api/v1/properties" "${GUEST_TOKEN}" ""
@@ -141,28 +168,31 @@ call_api "PROPERTIES get property by id" "GET" "${BASE_URL}/api/v1/properties/${
 # -------------------- BOOKINGS --------------------
 # create booking (main flow)
 call_api "BOOKINGS create #1 (guest -> host)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"2026-04-10\",\"checkOutDate\":\"2026-04-15\"}"
+  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"${BOOKING1_CHECKIN}\",\"checkOutDate\":\"${BOOKING1_CHECKOUT}\"}"
 BOOKING_ID=$(extract_json_number "$LAST_BODY" "id")
+require_id "$BOOKING_ID" "BOOKING_ID"
 
 # create booking for reject flow
 call_api "BOOKINGS create #2 (will reject)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST2_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-05-01\",\"checkOutDate\":\"2026-05-05\"}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"${BOOKING2_CHECKIN}\",\"checkOutDate\":\"${BOOKING2_CHECKOUT}\"}"
 BOOKING2_ID=$(extract_json_number "$LAST_BODY" "id")
+require_id "$BOOKING2_ID" "BOOKING2_ID"
 
 # create mutable booking for update/delete
 call_api "BOOKINGS create #3 (for update/delete)" "POST" "${BASE_URL}/api/v1/bookings" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-06-01\",\"checkOutDate\":\"2026-06-06\"}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"${BOOKING3_CHECKIN}\",\"checkOutDate\":\"${BOOKING3_CHECKOUT}\"}"
 BOOKING3_ID=$(extract_json_number "$LAST_BODY" "id")
+require_id "$BOOKING3_ID" "BOOKING3_ID"
 
 # -------------------- ACCESS NEGATIVE CHECKS (expected 403) --------------------
 call_api "SECURITY host cannot pay booking (expected 403)" "POST" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/pay" "${HOST_TOKEN}" ""
 call_api "SECURITY guest cannot force status (expected 403)" "PATCH" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}/force-status" "${GUEST_TOKEN}" \
   "{\"status\":\"FORCED_COMPLETED\"}"
 call_api "SECURITY admin cannot create booking as guest flow (expected 403)" "POST" "${BASE_URL}/api/v1/bookings" "${ADMIN_TOKEN}" \
-  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"2026-07-01\",\"checkOutDate\":\"2026-07-05\"}"
+  "{\"propertyId\":${PROPERTY_ID},\"checkInDate\":\"${BOOKING_ADMIN_NEG_CHECKIN}\",\"checkOutDate\":\"${BOOKING_ADMIN_NEG_CHECKOUT}\"}"
 
 call_api "BOOKINGS update #3 by guest" "PUT" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" \
-  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"2026-06-02\",\"checkOutDate\":\"2026-06-07\"}"
+  "{\"propertyId\":${PROPERTY2_ID},\"checkInDate\":\"${BOOKING3_UPDATE_CHECKIN}\",\"checkOutDate\":\"${BOOKING3_UPDATE_CHECKOUT}\"}"
 call_api "BOOKINGS delete #3 by guest" "DELETE" "${BASE_URL}/api/v1/bookings/${BOOKING3_ID}" "${GUEST_TOKEN}" ""
 
 call_api "BOOKINGS get by id #1 (guest)" "GET" "${BASE_URL}/api/v1/bookings/${BOOKING_ID}" "${GUEST_TOKEN}" ""

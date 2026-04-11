@@ -30,38 +30,28 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByStatusAndCheckInDateBeforeOrEqual(@Param("status") BookingStatus status,
                                                           @Param("date") LocalDate date);
 
-    @Query(value = "SELECT b.* FROM bookings b " +
-            "WHERE b.host_id = :hostId " +
-            "AND (:guestId IS NULL OR b.guest_id = :guestId) " +
-            "AND (:status IS NULL OR b.status = CAST(:status AS text)) " +
-            "AND (:dateStr IS NULL OR (b.check_in_date <= CAST(:dateStr AS date) AND b.check_out_date > CAST(:dateStr AS date)))",
-            countQuery = "SELECT COUNT(*) FROM bookings b " +
-                    "WHERE b.host_id = :hostId " +
-                    "AND (:guestId IS NULL OR b.guest_id = :guestId) " +
-                    "AND (:status IS NULL OR b.status = CAST(:status AS text)) " +
-                    "AND (:dateStr IS NULL OR (b.check_in_date <= CAST(:dateStr AS date) AND b.check_out_date > CAST(:dateStr AS date)))",
-            nativeQuery = true)
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.hostId = :hostId " +
+            "AND b.guestId = COALESCE(:guestId, b.guestId) " +
+            "AND b.status = COALESCE(:status, b.status) " +
+            "AND b.checkInDate <= COALESCE(:date, b.checkInDate) " +
+            "AND b.checkOutDate > COALESCE(:date, b.checkInDate)")
     Page<Booking> findHostBookingsWithFilters(@Param("hostId") Long hostId,
                                               @Param("guestId") Long guestId,
-                                              @Param("dateStr") String dateStr,
-                                              @Param("status") String status,
+                                              @Param("date") LocalDate date,
+                                              @Param("status") BookingStatus status,
                                               Pageable pageable);
 
-    @Query(value = "SELECT b.* FROM bookings b " +
-            "WHERE b.guest_id = :guestId " +
-            "AND (:hostId IS NULL OR b.host_id = :hostId) " +
-            "AND (:status IS NULL OR b.status = CAST(:status AS text)) " +
-            "AND (:dateStr IS NULL OR (b.check_in_date <= CAST(:dateStr AS date) AND b.check_out_date > CAST(:dateStr AS date)))",
-            countQuery = "SELECT COUNT(*) FROM bookings b " +
-                    "WHERE b.guest_id = :guestId " +
-                    "AND (:hostId IS NULL OR b.host_id = :hostId) " +
-                    "AND (:status IS NULL OR b.status = CAST(:status AS text)) " +
-                    "AND (:dateStr IS NULL OR (b.check_in_date <= CAST(:dateStr AS date) AND b.check_out_date > CAST(:dateStr AS date)))",
-            nativeQuery = true)
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.guestId = :guestId " +
+            "AND b.hostId = COALESCE(:hostId, b.hostId) " +
+            "AND b.status = COALESCE(:status, b.status) " +
+            "AND b.checkInDate <= COALESCE(:date, b.checkInDate) " +
+            "AND b.checkOutDate > COALESCE(:date, b.checkInDate)")
     Page<Booking> findGuestBookingsWithFilters(@Param("guestId") Long guestId,
                                                @Param("hostId") Long hostId,
-                                               @Param("dateStr") String dateStr,
-                                               @Param("status") String status,
+                                               @Param("date") LocalDate date,
+                                               @Param("status") BookingStatus status,
                                                Pageable pageable);
 
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +

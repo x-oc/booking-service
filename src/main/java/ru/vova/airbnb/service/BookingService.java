@@ -14,12 +14,12 @@ import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
-import ru.vova.airbnb.entity.Property;
 import ru.vova.airbnb.entity.SupportRequestInitiator;
 import ru.vova.airbnb.entity.User;
 import ru.vova.airbnb.events.BookingNotificationEvent;
 import ru.vova.airbnb.exception.BookingException;
 import ru.vova.airbnb.mapper.BookingMapper;
+import ru.vova.airbnb.property.entity.Property;
 import ru.vova.airbnb.repository.BookingRepository;
 import ru.vova.airbnb.repository.UserRepository;
 import ru.vova.airbnb.security.jwt.UserDetailsImpl;
@@ -32,7 +32,9 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -426,6 +428,42 @@ public class BookingService {
         ).map(bookingMapper::toResponse);
     }
 
+    @PreAuthorize("hasAuthority('BOOKING_FORCE_STATUS')")
+    public String runDistributedTxProbe(Long hostId,
+                                        Long guestId,
+                                        boolean forceFailure,
+                                        String externalProbeKey) {
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            String probeKey = (externalProbeKey != null && !externalProbeKey.isBlank())
+                    ? externalProbeKey
+                    : UUID.randomUUID().toString();
+
+            Property probeProperty = propertyService.createProbeProperty(hostId, probeKey);
+
+            Booking booking = new Booking();
+            booking.setGuestId(guestId);
+            booking.setHostId(hostId);
+            booking.setPropertyId(probeProperty.getId());
+            booking.setStatus(BookingStatus.CREATED);
+            booking.setCheckInDate(LocalDate.now(moscowClock).plusDays(30));
+            booking.setCheckOutDate(LocalDate.now(moscowClock).plusDays(32));
+            booking.setTotalAmount(BigDecimal.TEN);
+            booking.setRefundedAmount(BigDecimal.ZERO);
+            booking.setSupportRequestInitiator(null);
+            booking.setSupportRequestedAt(null);
+
+            bookingRepository.save(booking);
+
+            if (forceFailure) {
+                throw new BookingException("Distributed transaction probe forced rollback. probeKey="
+                        + probeKey + ", propertyId=" + probeProperty.getId());
+            }
+
+            return "Distributed transaction probe committed. probeKey="
+                    + probeKey + ", propertyId=" + probeProperty.getId();
+        }));
+    }
+
     public void cancelExpiredPayments() {
         transactionTemplate.executeWithoutResult(status -> {
             log.info("Checking for expired payments");
@@ -528,10 +566,8 @@ public class BookingService {
         Long effectiveHostId = currentUser.getId();
 
         Long effectiveGuestId = resolveFilterUserId(guestId, guestEmail, "Guest");
-        Pageable pageable = buildPageable(page, size, sortBy, direction);
-        String statusStr = status != null ? status.name() : null;
-        String dateStr = date != null ? date.toString() : null;
-        return bookingRepository.findHostBookingsWithFilters(effectiveHostId, effectiveGuestId, dateStr, statusStr, pageable)
+        Pageable pageable = buildEntityPageable(page, size, sortBy, direction);
+        return bookingRepository.findHostBookingsWithFilters(effectiveHostId, effectiveGuestId, date, status, pageable)
                 .map(bookingMapper::toResponse);
     }
 
@@ -548,10 +584,8 @@ public class BookingService {
         Long effectiveGuestId = currentUser.getId();
 
         Long effectiveHostId = resolveFilterUserId(hostId, hostEmail, "Host");
-        Pageable pageable = buildPageable(page, size, sortBy, direction);
-        String statusStr = status != null ? status.name() : null;
-        String dateStr = date != null ? date.toString() : null;
-        return bookingRepository.findGuestBookingsWithFilters(effectiveGuestId, effectiveHostId, dateStr, statusStr, pageable)
+        Pageable pageable = buildEntityPageable(page, size, sortBy, direction);
+        return bookingRepository.findGuestBookingsWithFilters(effectiveGuestId, effectiveHostId, date, status, pageable)
                 .map(bookingMapper::toResponse);
     }
 

@@ -1,0 +1,63 @@
+services:
+  db-core:
+    image: postgres:16-alpine
+    container_name: airbnb-db-core
+    environment:
+      POSTGRES_DB: airbnb_core
+      POSTGRES_USER: airbnb
+      POSTGRES_PASSWORD: airbnb
+    ports:
+      - "5433:5432"
+    command: ["postgres", "-c", "max_prepared_transactions=100"]
+    volumes:
+      - db-core-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airbnb -d airbnb_core"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  db-property:
+    image: postgres:16-alpine
+    container_name: airbnb-db-property
+    environment:
+      POSTGRES_DB: airbnb_property
+      POSTGRES_USER: airbnb
+      POSTGRES_PASSWORD: airbnb
+    ports:
+      - "5434:5432"
+    command: ["postgres", "-c", "max_prepared_transactions=100"]
+    volumes:
+      - db-property-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airbnb -d airbnb_property"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airbnb-app
+    depends_on:
+      db-core:
+        condition: service_healthy
+      db-property:
+        condition: service_healthy
+    environment:
+      CORE_DB_URL: jdbc:postgresql://db-core:5432/airbnb_core
+      CORE_DB_USERNAME: airbnb
+      CORE_DB_PASSWORD: airbnb
+      PROPERTY_DB_URL: jdbc:postgresql://db-property:5432/airbnb_property
+      PROPERTY_DB_USERNAME: airbnb
+      PROPERTY_DB_PASSWORD: airbnb
+      JWT_SECRET: superSecretKeyHereSuperSecretKeyHereSuperSecretKeyHereSuperSecretKeyHere
+      JWT_EXPIRATION_MS: "86400000"
+    ports:
+      - "28800:28800"
+    restart: unless-stopped
+
+volumes:
+  db-core-data:
+  db-property-data:

@@ -6,9 +6,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.vova.airbnb.controller.dto.PropertyCreateRequest;
 import ru.vova.airbnb.controller.dto.PropertyResponse;
-import ru.vova.airbnb.entity.Property;
 import ru.vova.airbnb.exception.BookingException;
-import ru.vova.airbnb.repository.PropertyRepository;
+import ru.vova.airbnb.property.entity.Property;
+import ru.vova.airbnb.property.repository.PropertyRepository;
 
 import java.util.List;
 
@@ -61,6 +61,16 @@ public class PropertyService {
     public Property lockPropertyForUpdate(Long propertyId) {
         return propertyRepository.findByIdForUpdate(propertyId)
                 .orElseThrow(() -> new BookingException("Property not found with id: " + propertyId));
+    }
+
+    public Property createProbeProperty(Long hostId, String probeKey) {
+        Property property = new Property();
+        property.setHostId(hostId);
+        property.setTitle("TX_PROBE_" + probeKey);
+        property.setAddress("TX_PROBE_ADDRESS_" + probeKey);
+        property.setBasePricePerDay(java.math.BigDecimal.ONE);
+        property.setActive(true);
+        return propertyRepository.save(property);
     }
 
     private PropertyResponse toResponse(Property property) {
