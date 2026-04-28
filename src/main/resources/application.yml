@@ -14,7 +14,13 @@ spring:
   jackson:
     time-zone: Europe/Moscow
 
+  quartz:
+    job-store-type: memory
+    auto-startup: ${APP_SCHEDULER_ENABLED:true}
+
 app:
+  node:
+    id: ${APP_NODE_ID:${HOSTNAME:local-node}}
   datasource:
     core:
       xa-class-name: org.postgresql.xa.PGXADataSource
@@ -35,6 +41,23 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS}
+  messaging:
+    rabbit:
+      host: ${RABBITMQ_HOST:localhost}
+      amqp-port: ${RABBITMQ_AMQP_PORT:5672}
+      stomp-port: ${RABBITMQ_STOMP_PORT:61613}
+      username: ${RABBITMQ_USERNAME:guest}
+      password: ${RABBITMQ_PASSWORD:guest}
+      virtual-host: ${RABBITMQ_VHOST:/}
+    payment:
+      queue: ${APP_PAYMENT_QUEUE:payment.processing}
+    consumer:
+      enabled: ${APP_MESSAGING_CONSUMER_ENABLED:true}
+  scheduler:
+    enabled: ${APP_SCHEDULER_ENABLED:true}
+    payment-timeout-cron: ${APP_SCHEDULER_PAYMENT_TIMEOUT_CRON:0/20 * * * * ?}
+    stay-completion-cron: ${APP_SCHEDULER_STAY_COMPLETION_CRON:5/25 * * * * ?}
+    activation-cron: ${APP_SCHEDULER_ACTIVATION_CRON:10/30 * * * * ?}
 
 server:
   port: 28800

@@ -34,12 +34,14 @@ java -jar app.jar
 ## После запуска доступны:
 - 📚 http://localhost:28800/swagger-ui.html API документация
 
-## Docker Compose (2 БД + приложение)
+## Docker Compose (2 БД + API + worker + RabbitMQ)
 
-В репозитории есть `docker-compose.yml` с тремя сервисами:
+В репозитории есть `docker-compose.yml` со следующими сервисами:
 - `db-core`: БД для `bookings` и `users`
 - `db-property`: отдельная БД для `properties`
-- `app`: Spring Boot приложение
+- `rabbitmq`: брокер сообщений (AMQP + STOMP + management)
+- `app`: API-узел (принимает HTTP, публикует платежные задачи в RabbitMQ по STOMP)
+- `app-worker`: worker-узел (получает платежные задачи из RabbitMQ через JMS API и выполняет Quartz jobs)
 
 Запуск:
 ```
@@ -55,6 +57,16 @@ docker compose up --build -d
 Остановка:
 ```
 docker compose down
+```
+
+Проверка асинхронной распределенной обработки платежей:
+```
+bash "api usage/test_async_worker_processing.sh"
+```
+
+Проверка запуска периодических Quartz задач:
+```
+bash "api usage/test_quartz_scheduler.sh"
 ```
 
 ## Модель доступа (RBAC + privileges)

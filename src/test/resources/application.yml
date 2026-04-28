@@ -1,4 +1,6 @@
 app:
+  node:
+    id: test-node
   datasource:
     core:
       xa-class-name: org.h2.jdbcx.JdbcDataSource
@@ -20,4 +22,20 @@ app:
   jwt:
     secret: testSecretKeyForJwtGenerationMustBeLongEnough12345
     expiration-ms: 86400000
+
+  messaging:
+    rabbit:
+      host: localhost
+      amqp-port: 5672
+      stomp-port: 61613
+      username: guest
+      password: guest
+      virtual-host: /
+    payment:
+      queue: payment.processing
+    consumer:
+      enabled: false
+
+  scheduler:
+    enabled: false
 

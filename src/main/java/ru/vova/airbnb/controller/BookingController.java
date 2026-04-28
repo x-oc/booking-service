@@ -65,10 +65,11 @@ public class BookingController {
     }
 
     @PostMapping("/{id}/pay")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
             tags = {"Guest"},
-            summary = "Pay booking",
-            description = "Role: GUEST. Pays a confirmed booking."
+            summary = "Queue booking payment",
+            description = "Role: GUEST. Sends booking payment to async processing queue."
     )
     public BookingResponse payForBooking(
             @PathVariable Long id,

@@ -35,6 +35,24 @@ services:
       timeout: 5s
       retries: 15
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: airbnb-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    command: /bin/sh -c "rabbitmq-plugins enable --offline rabbitmq_stomp && rabbitmq-server"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   app:
     build:
       context: .
@@ -45,6 +63,8 @@ services:
         condition: service_healthy
       db-property:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       CORE_DB_URL: jdbc:postgresql://db-core:5432/airbnb_core
       CORE_DB_USERNAME: airbnb
@@ -54,8 +74,47 @@ services:
       PROPERTY_DB_PASSWORD: airbnb
       JWT_SECRET: superSecretKeyHereSuperSecretKeyHereSuperSecretKeyHereSuperSecretKeyHere
       JWT_EXPIRATION_MS: "86400000"
+      APP_NODE_ID: app-api-node
+      APP_MESSAGING_CONSUMER_ENABLED: "false"
+      APP_SCHEDULER_ENABLED: "false"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_AMQP_PORT: "5672"
+      RABBITMQ_STOMP_PORT: "61613"
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
     ports:
       - "28800:28800"
+    restart: unless-stopped
+
+  app-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airbnb-app-worker
+    depends_on:
+      db-core:
+        condition: service_healthy
+      db-property:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      CORE_DB_URL: jdbc:postgresql://db-core:5432/airbnb_core
+      CORE_DB_USERNAME: airbnb
+      CORE_DB_PASSWORD: airbnb
+      PROPERTY_DB_URL: jdbc:postgresql://db-property:5432/airbnb_property
+      PROPERTY_DB_USERNAME: airbnb
+      PROPERTY_DB_PASSWORD: airbnb
+      JWT_SECRET: superSecretKeyHereSuperSecretKeyHereSuperSecretKeyHereSuperSecretKeyHere
+      JWT_EXPIRATION_MS: "86400000"
+      APP_NODE_ID: app-worker-node
+      APP_MESSAGING_CONSUMER_ENABLED: "true"
+      APP_SCHEDULER_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_AMQP_PORT: "5672"
+      RABBITMQ_STOMP_PORT: "61613"
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
     restart: unless-stopped
 
 volumes:

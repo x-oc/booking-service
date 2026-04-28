@@ -22,7 +22,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
         @Query("SELECT b FROM Booking b WHERE b.id = :id")
         java.util.Optional<Booking> findByIdForUpdate(@Param("id") Long id);
 
-    List<Booking> findByStatusAndPaymentDeadlineBefore(BookingStatus status, LocalDateTime now);
+        List<Booking> findByStatusInAndPaymentDeadlineBefore(List<BookingStatus> statuses, LocalDateTime now);
 
     List<Booking> findByStatusAndCheckOutDateBefore(BookingStatus status, LocalDate now);
 
