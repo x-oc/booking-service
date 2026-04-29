@@ -31,6 +31,7 @@ import ru.vova.airbnb.security.jwt.UserDetailsImpl;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -346,6 +347,22 @@ public class BookingService {
             booking.setStatus(BookingStatus.PAID);
             Booking savedBooking = bookingRepository.save(booking);
 
+            try {
+                OneCPaymentRequest paymentRequest = OneCPaymentRequest.builder()
+                        .externalId(String.valueOf(savedBooking.getId()))
+                        .amount(savedBooking.getTotalAmount())
+                        .payerEmail("guest_" + savedBooking.getGuestId())
+                        .payeeEmail("host_" + savedBooking.getHostId())
+                        .description("Booking payment #" + savedBooking.getId())
+                        .build();
+
+                oneCIntegrationService.sendPaymentTo1CWithRetry(paymentRequest, 3, Duration.ofSeconds(1));
+                log.info("Payment sent to 1C for booking: {}", savedBooking.getId());
+            } catch (Exception e) {
+                log.error("Failed to send payment to 1C for booking: {}", savedBooking.getId(), e);
+                throw new BookingException("Failed to send payment to 1C after retries: " + e.getMessage());
+            }
+
             applicationEventPublisher.publishEvent(
                     BookingNotificationEvent.host(
                             savedBooking.getHostId(),
@@ -358,22 +375,6 @@ public class BookingService {
 
         if (paidBooking == null) {
             return;
-        }
-
-        try {
-            OneCPaymentRequest paymentRequest = OneCPaymentRequest.builder()
-                    .externalId(String.valueOf(paidBooking.getId()))
-                    .amount(paidBooking.getTotalAmount())
-                    .payerEmail("guest_" + paidBooking.getGuestId())
-                    .payeeEmail("host_" + paidBooking.getHostId())
-                    .description("Booking payment #" + paidBooking.getId())
-                    .build();
-
-            oneCIntegrationService.sendPaymentTo1C(paymentRequest);
-            log.info("Payment sent to 1C for booking: {}", paidBooking.getId());
-        } catch (Exception e) {
-            log.error("Failed to send payment to 1C for booking: {}", paidBooking.getId(), e);
-            // Не откатываем оплату, только логируем
         }
 
         if (!paidBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {

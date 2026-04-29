@@ -12,6 +12,7 @@ import ru.vova.airbnb.controller.dto.OneCPaymentResponse;
 import ru.vova.airbnb.exception.BookingException;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +71,50 @@ public class OneCIntegrationService {
         } catch (Exception e) {
             log.error("Failed to send payment to 1C", e);
             throw new BookingException("Failed to send payment to 1C: " + e.getMessage());
+        }
+    }
+
+    public OneCPaymentResponse sendPaymentTo1CWithRetry(OneCPaymentRequest request,
+                                                        int maxAttempts,
+                                                        Duration delayBetweenAttempts) {
+        if (maxAttempts < 1) {
+            throw new IllegalArgumentException("maxAttempts must be at least 1");
+        }
+
+        RuntimeException lastError = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                if (attempt > 1) {
+                    log.warn("Retrying 1C payment send, attempt {}/{} for bookingId={}",
+                            attempt, maxAttempts, request.getExternalId());
+                    sleepQuietly(delayBetweenAttempts);
+                }
+
+                return sendPaymentTo1C(request);
+            } catch (RuntimeException ex) {
+                lastError = ex;
+                log.warn("1C payment send attempt {}/{} failed for bookingId={}: {}",
+                        attempt,
+                        maxAttempts,
+                        request.getExternalId(),
+                        ex.getMessage());
+            }
+        }
+
+        throw new BookingException("Failed to send payment to 1C after " + maxAttempts + " attempts: "
+                + (lastError != null ? lastError.getMessage() : "unknown error"));
+    }
+
+    private void sleepQuietly(Duration delayBetweenAttempts) {
+        if (delayBetweenAttempts == null || delayBetweenAttempts.isZero() || delayBetweenAttempts.isNegative()) {
+            return;
+        }
+
+        try {
+            TimeUnit.MILLISECONDS.sleep(delayBetweenAttempts.toMillis());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new BookingException("Interrupted while waiting before 1C retry");
         }
     }
 }
