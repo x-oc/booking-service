@@ -58,6 +58,8 @@ app:
     payment-timeout-cron: ${APP_SCHEDULER_PAYMENT_TIMEOUT_CRON:0/20 * * * * ?}
     stay-completion-cron: ${APP_SCHEDULER_STAY_COMPLETION_CRON:5/25 * * * * ?}
     activation-cron: ${APP_SCHEDULER_ACTIVATION_CRON:10/30 * * * * ?}
+  1c:
+    base-url: http://host.docker.internal/airbnb
 
 server:
   port: 28800

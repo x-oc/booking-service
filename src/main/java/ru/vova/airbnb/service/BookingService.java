@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.vova.airbnb.controller.dto.BookingRequest;
 import ru.vova.airbnb.controller.dto.BookingResponse;
+import ru.vova.airbnb.controller.dto.OneCPaymentRequest;
 import ru.vova.airbnb.entity.Booking;
 import ru.vova.airbnb.entity.BookingStatus;
 import ru.vova.airbnb.entity.SupportRequestInitiator;
@@ -33,11 +34,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +44,7 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final PropertyService propertyService;
+    private final OneCIntegrationService oneCIntegrationService;
     private final BookingMapper bookingMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final TransactionTemplate transactionTemplate;
@@ -73,10 +71,10 @@ public class BookingService {
                     request.getCheckInDate(),
                     request.getCheckOutDate(),
                     Arrays.asList(BookingStatus.CREATED,
-                        BookingStatus.AWAITING_PAYMENT,
-                        BookingStatus.PAYMENT_PROCESSING,
-                        BookingStatus.PAID,
-                        BookingStatus.ACTIVE))) {
+                            BookingStatus.AWAITING_PAYMENT,
+                            BookingStatus.PAYMENT_PROCESSING,
+                            BookingStatus.PAID,
+                            BookingStatus.ACTIVE))) {
                 throw new BookingException("Property is already booked for selected dates");
             }
 
@@ -126,10 +124,10 @@ public class BookingService {
                     request.getCheckInDate(),
                     request.getCheckOutDate(),
                     Arrays.asList(BookingStatus.CREATED,
-                        BookingStatus.AWAITING_PAYMENT,
-                        BookingStatus.PAYMENT_PROCESSING,
-                        BookingStatus.PAID,
-                        BookingStatus.ACTIVE))) {
+                            BookingStatus.AWAITING_PAYMENT,
+                            BookingStatus.PAYMENT_PROCESSING,
+                            BookingStatus.PAID,
+                            BookingStatus.ACTIVE))) {
                 throw new BookingException("Property is already booked for selected dates");
             }
 
@@ -194,9 +192,9 @@ public class BookingService {
                     booking.getCheckInDate(),
                     booking.getCheckOutDate(),
                     Arrays.asList(BookingStatus.AWAITING_PAYMENT,
-                        BookingStatus.PAYMENT_PROCESSING,
-                        BookingStatus.PAID,
-                        BookingStatus.ACTIVE))) {
+                            BookingStatus.PAYMENT_PROCESSING,
+                            BookingStatus.PAID,
+                            BookingStatus.ACTIVE))) {
                 throw new BookingException("Property is already booked for selected dates");
             }
 
@@ -251,16 +249,16 @@ public class BookingService {
             Booking booking = findBookingByIdForUpdate(bookingId);
 
             if (!booking.getGuestId().equals(guestId)) {
-            throw new BookingException("You don't have permission to pay for this booking");
+                throw new BookingException("You don't have permission to pay for this booking");
             }
 
             validateTransition(booking.getStatus(), BookingStatus.PAYMENT_PROCESSING);
 
             if (booking.getPaymentDeadline() != null
-                && LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            throw new BookingException("Payment deadline has expired");
+                    && LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                throw new BookingException("Payment deadline has expired");
             }
 
             booking.setStatus(BookingStatus.PAYMENT_PROCESSING);
@@ -268,11 +266,11 @@ public class BookingService {
         }));
 
         PaymentTaskMessage message = new PaymentTaskMessage(
-            updatedBooking.getId(),
-            updatedBooking.getGuestId(),
-            LocalDateTime.now(moscowClock),
-            UUID.randomUUID().toString(),
-            nodeId
+                updatedBooking.getId(),
+                updatedBooking.getGuestId(),
+                LocalDateTime.now(moscowClock),
+                UUID.randomUUID().toString(),
+                nodeId
         );
 
         try {
@@ -283,82 +281,98 @@ public class BookingService {
         }
 
         applicationEventPublisher.publishEvent(
-            BookingNotificationEvent.guest(
-                updatedBooking.getGuestId(),
-                "Payment request accepted and queued for processing."
-            )
+                BookingNotificationEvent.guest(
+                        updatedBooking.getGuestId(),
+                        "Payment request accepted and queued for processing."
+                )
         );
         return bookingMapper.toResponse(updatedBooking);
     }
 
-        public void processPaymentTask(PaymentTaskMessage message, String processorNodeId) {
+    public void processPaymentTask(PaymentTaskMessage message, String processorNodeId) {
         transactionTemplate.executeWithoutResult(status -> {
             log.info("Node '{}' processing payment task for booking {}, requestId={}",
-                processorNodeId,
-                message.bookingId(),
-                message.requestId());
+                    processorNodeId,
+                    message.bookingId(),
+                    message.requestId());
 
             Booking booking = findBookingByIdForUpdate(message.bookingId());
 
             if (booking.getStatus() != BookingStatus.PAYMENT_PROCESSING) {
-            log.info("Skipping payment task for booking {} because status is {}",
-                booking.getId(), booking.getStatus());
-            return;
+                log.info("Skipping payment task for booking {} because status is {}",
+                        booking.getId(), booking.getStatus());
+                return;
             }
 
             if (booking.getPaymentDeadline() != null
-                && LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                    booking.getGuestId(),
-                    "Payment deadline has expired. Booking is cancelled."
-                )
-            );
-            applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                    booking.getHostId(),
-                    "Booking cancelled because payment deadline expired."
-                )
-            );
-            return;
+                    && LocalDateTime.now(moscowClock).isAfter(booking.getPaymentDeadline())) {
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.guest(
+                                booking.getGuestId(),
+                                "Payment deadline has expired. Booking is cancelled."
+                        )
+                );
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.host(
+                                booking.getHostId(),
+                                "Booking cancelled because payment deadline expired."
+                        )
+                );
+                return;
             }
 
             if (random.nextDouble() < 0.2) {
-            log.warn("Payment failed on node '{}' for booking {}", processorNodeId, booking.getId());
-            booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
-            bookingRepository.save(booking);
-            applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.guest(
-                    booking.getGuestId(),
-                    "Payment failed. Your booking has been cancelled. Please create a new booking request."
-                )
-            );
-            applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                    booking.getHostId(),
-                    "Booking cancelled due to payment failure."
-                )
-            );
-            return;
+                log.warn("Payment failed on node '{}' for booking {}", processorNodeId, booking.getId());
+                booking.setStatus(BookingStatus.CANCELLED_EXPIRED);
+                bookingRepository.save(booking);
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.guest(
+                                booking.getGuestId(),
+                                "Payment failed. Your booking has been cancelled. Please create a new booking request."
+                        )
+                );
+                applicationEventPublisher.publishEvent(
+                        BookingNotificationEvent.host(
+                                booking.getHostId(),
+                                "Booking cancelled due to payment failure."
+                        )
+                );
+                return;
             }
 
             booking.setStatus(BookingStatus.PAID);
             Booking paidBooking = bookingRepository.save(booking);
 
+            try {
+                OneCPaymentRequest paymentRequest = OneCPaymentRequest.builder()
+                        .externalId(String.valueOf(paidBooking.getId()))
+                        .amount(paidBooking.getTotalAmount())
+                        .payerEmail("guest_" + paidBooking.getGuestId())
+                        .payeeEmail("host_" + paidBooking.getHostId())
+                        .description("Booking payment #" + paidBooking.getId())
+                        .build();
+
+                oneCIntegrationService.sendPaymentTo1C(paymentRequest);
+                log.info("Payment sent to 1C for booking: {}", paidBooking.getId());
+            } catch (Exception e) {
+                log.error("Failed to send payment to 1C for booking: {}", paidBooking.getId(), e);
+                // Не откатываем транзакцию, только логируем
+            }
+
             applicationEventPublisher.publishEvent(
-                BookingNotificationEvent.host(
-                    paidBooking.getHostId(),
-                    "Guest has paid for booking. Payment received."
-                )
+                    BookingNotificationEvent.host(
+                            paidBooking.getHostId(),
+                            "Guest has paid for booking. Payment received."
+                    )
             );
 
             if (!paidBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
-            activateBooking(paidBooking);
+                activateBooking(paidBooking);
             }
         });
-        }
+    }
 
     @PreAuthorize("hasAuthority('BOOKING_FORCE_STATUS')")
     public BookingResponse forceChangeStatus(Long bookingId, BookingStatus newStatus) {
@@ -547,7 +561,7 @@ public class BookingService {
 
             List<Booking> expiredBookings = bookingRepository
                     .findByStatusInAndPaymentDeadlineBefore(
-                        Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAYMENT_PROCESSING),
+                            Arrays.asList(BookingStatus.AWAITING_PAYMENT, BookingStatus.PAYMENT_PROCESSING),
                             LocalDateTime.now(moscowClock)
                     );
 
@@ -591,13 +605,13 @@ public class BookingService {
                 bookingRepository.save(lockedBooking);
                 applicationEventPublisher.publishEvent(
                         BookingNotificationEvent.guest(
-                        lockedBooking.getGuestId(),
+                                lockedBooking.getGuestId(),
                                 "Your stay has been completed. Thank you for choosing us!"
                         )
                 );
                 applicationEventPublisher.publishEvent(
                         BookingNotificationEvent.host(
-                        lockedBooking.getHostId(),
+                                lockedBooking.getHostId(),
                                 "Guest stay completed. Payment will be processed soon."
                         )
                 );
@@ -700,7 +714,8 @@ public class BookingService {
     private void validateTransition(BookingStatus current, BookingStatus target) {
         boolean isValid = switch (current) {
             case CREATED -> target == BookingStatus.AWAITING_PAYMENT || target == BookingStatus.REJECTED;
-            case AWAITING_PAYMENT -> target == BookingStatus.PAYMENT_PROCESSING || target == BookingStatus.CANCELLED_EXPIRED;
+            case AWAITING_PAYMENT ->
+                    target == BookingStatus.PAYMENT_PROCESSING || target == BookingStatus.CANCELLED_EXPIRED;
             case PAYMENT_PROCESSING -> target == BookingStatus.PAID || target == BookingStatus.CANCELLED_EXPIRED;
             case PAID -> target == BookingStatus.ACTIVE || target == BookingStatus.CANCELLED_BY_ADMIN;
             case ACTIVE -> target == BookingStatus.COMPLETED || target == BookingStatus.CANCELLED_BY_ADMIN;
