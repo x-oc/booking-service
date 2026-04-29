@@ -13,6 +13,7 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -44,6 +45,7 @@ public class PaymentTaskStompProducer {
     public void send(PaymentTaskMessage taskMessage) {
         String payload = toJson(taskMessage);
         String destination = "/queue/" + queueName;
+        String receiptId = "payment-send-" + UUID.randomUUID();
 
         try (Socket socket = new Socket(host, stompPort);
              BufferedOutputStream outputStream = new BufferedOutputStream(socket.getOutputStream());
@@ -55,7 +57,7 @@ public class PaymentTaskStompProducer {
                     + "login:" + username + "\n"
                     + "passcode:" + password + "\n\n");
 
-            String connectResponse = readFrame(inputStream);
+            String connectResponse = normalizeFrame(readFrame(inputStream));
             if (!connectResponse.startsWith("CONNECTED")) {
                 throw new IllegalStateException("STOMP broker did not acknowledge CONNECT. Response=" + connectResponse);
             }
@@ -63,10 +65,19 @@ public class PaymentTaskStompProducer {
             writeFrame(outputStream, "SEND\n"
                     + "destination:" + destination + "\n"
                     + "content-type:text/plain\n"
+                    + "persistent:true\n"
+                    + "receipt:" + receiptId + "\n"
                     + "JMSType:TextMessage\n"
                     + "amqp-content-type:text/plain\n"
                     + "amqp-type:longstr\n\n"
                     + payload);
+
+            String sendReceiptResponse = normalizeFrame(readFrame(inputStream));
+            if (!sendReceiptResponse.startsWith("RECEIPT")
+                    || !sendReceiptResponse.contains("receipt-id:" + receiptId)) {
+                throw new IllegalStateException("STOMP broker did not acknowledge SEND receipt. Response="
+                        + sendReceiptResponse);
+            }
 
             writeFrame(outputStream, "DISCONNECT\n\n");
             log.info("Sent payment task to RabbitMQ STOMP queue '{}', bookingId={}, requestId={}",
@@ -102,5 +113,9 @@ public class PaymentTaskStompProducer {
             builder.append((char) current);
         }
         return builder.toString();
+    }
+
+    private String normalizeFrame(String frame) {
+        return frame.replace("\r", "").stripLeading();
     }
 }

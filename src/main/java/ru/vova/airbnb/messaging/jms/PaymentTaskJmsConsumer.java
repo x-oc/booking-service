@@ -1,6 +1,8 @@
 package ru.vova.airbnb.messaging.jms;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.jms.admin.RMQDestination;
 import com.rabbitmq.jms.admin.RMQConnectionFactory;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +63,8 @@ public class PaymentTaskJmsConsumer {
     @jakarta.annotation.PostConstruct
     public void start() {
         try {
+            ensureDurableQueueExists();
+
             RMQConnectionFactory connectionFactory = new RMQConnectionFactory();
             connectionFactory.setHost(host);
             connectionFactory.setPort(amqpPort);
@@ -85,6 +89,21 @@ public class PaymentTaskJmsConsumer {
             log.info("JMS payment consumer started on node '{}', queue='{}'", nodeId, queueName);
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to start JMS payment consumer", ex);
+        }
+    }
+
+    private void ensureDurableQueueExists() throws Exception {
+        ConnectionFactory rabbitConnectionFactory = new ConnectionFactory();
+        rabbitConnectionFactory.setHost(host);
+        rabbitConnectionFactory.setPort(amqpPort);
+        rabbitConnectionFactory.setUsername(username);
+        rabbitConnectionFactory.setPassword(password);
+        rabbitConnectionFactory.setVirtualHost(virtualHost);
+
+        try (com.rabbitmq.client.Connection rabbitConnection = rabbitConnectionFactory.newConnection(
+                "queue-declare-" + nodeId);
+             Channel channel = rabbitConnection.createChannel()) {
+            channel.queueDeclare(queueName, true, false, false, null);
         }
     }
 

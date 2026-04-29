@@ -277,6 +277,7 @@ public class BookingService {
             paymentTaskStompProducer.send(message);
         } catch (Exception ex) {
             rollbackPaymentProcessingStatus(updatedBooking.getId());
+            log.warn("Unable to enqueue payment task.", ex);
             throw new BookingException("Unable to enqueue payment task. Please retry.");
         }
 
