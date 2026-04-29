@@ -290,7 +290,7 @@ public class BookingService {
     }
 
     public void processPaymentTask(PaymentTaskMessage message, String processorNodeId) {
-        transactionTemplate.executeWithoutResult(status -> {
+        Booking paidBooking = transactionTemplate.execute(status -> {
             log.info("Node '{}' processing payment task for booking {}, requestId={}",
                     processorNodeId,
                     message.bookingId(),
@@ -301,7 +301,7 @@ public class BookingService {
             if (booking.getStatus() != BookingStatus.PAYMENT_PROCESSING) {
                 log.info("Skipping payment task for booking {} because status is {}",
                         booking.getId(), booking.getStatus());
-                return;
+                return null;
             }
 
             if (booking.getPaymentDeadline() != null
@@ -320,7 +320,7 @@ public class BookingService {
                                 "Booking cancelled because payment deadline expired."
                         )
                 );
-                return;
+                return null;
             }
 
             if (random.nextDouble() < 0.2) {
@@ -339,39 +339,45 @@ public class BookingService {
                                 "Booking cancelled due to payment failure."
                         )
                 );
-                return;
+                return null;
             }
 
             booking.setStatus(BookingStatus.PAID);
-            Booking paidBooking = bookingRepository.save(booking);
-
-            try {
-                OneCPaymentRequest paymentRequest = OneCPaymentRequest.builder()
-                        .externalId(String.valueOf(paidBooking.getId()))
-                        .amount(paidBooking.getTotalAmount())
-                        .payerEmail("guest_" + paidBooking.getGuestId())
-                        .payeeEmail("host_" + paidBooking.getHostId())
-                        .description("Booking payment #" + paidBooking.getId())
-                        .build();
-
-                oneCIntegrationService.sendPaymentTo1C(paymentRequest);
-                log.info("Payment sent to 1C for booking: {}", paidBooking.getId());
-            } catch (Exception e) {
-                log.error("Failed to send payment to 1C for booking: {}", paidBooking.getId(), e);
-                // Не откатываем транзакцию, только логируем
-            }
+            Booking savedBooking = bookingRepository.save(booking);
 
             applicationEventPublisher.publishEvent(
                     BookingNotificationEvent.host(
-                            paidBooking.getHostId(),
+                            savedBooking.getHostId(),
                             "Guest has paid for booking. Payment received."
                     )
             );
 
-            if (!paidBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
-                activateBooking(paidBooking);
-            }
+            return savedBooking;
         });
+
+        if (paidBooking == null) {
+            return;
+        }
+
+        try {
+            OneCPaymentRequest paymentRequest = OneCPaymentRequest.builder()
+                    .externalId(String.valueOf(paidBooking.getId()))
+                    .amount(paidBooking.getTotalAmount())
+                    .payerEmail("guest_" + paidBooking.getGuestId())
+                    .payeeEmail("host_" + paidBooking.getHostId())
+                    .description("Booking payment #" + paidBooking.getId())
+                    .build();
+
+            oneCIntegrationService.sendPaymentTo1C(paymentRequest);
+            log.info("Payment sent to 1C for booking: {}", paidBooking.getId());
+        } catch (Exception e) {
+            log.error("Failed to send payment to 1C for booking: {}", paidBooking.getId(), e);
+            // Не откатываем оплату, только логируем
+        }
+
+        if (!paidBooking.getCheckInDate().isAfter(LocalDate.now(moscowClock))) {
+            activateBooking(paidBooking);
+        }
     }
 
     @PreAuthorize("hasAuthority('BOOKING_FORCE_STATUS')")

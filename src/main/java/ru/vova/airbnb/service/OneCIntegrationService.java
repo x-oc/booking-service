@@ -11,6 +11,8 @@ import ru.vova.airbnb.controller.dto.OneCPaymentRequest;
 import ru.vova.airbnb.controller.dto.OneCPaymentResponse;
 import ru.vova.airbnb.exception.BookingException;
 
+import java.time.Duration;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -33,7 +35,7 @@ public class OneCIntegrationService {
                                     .flatMap(error -> Mono.error(new BookingException("1C error: " + error)))
                     )
                     .bodyToMono(String.class)
-                    .block();
+                    .block(Duration.ofSeconds(5));
 
             log.info("1C test connection response: {}", response);
             return response;
@@ -58,7 +60,7 @@ public class OneCIntegrationService {
                                     .flatMap(error -> Mono.error(new BookingException("1C error: " + error)))
                     )
                     .bodyToMono(OneCPaymentResponse.class)
-                    .block();
+                    .block(Duration.ofSeconds(5));
 
             log.info("Payment sent to 1C successfully: bookingId={}, documentId={}",
                     request.getExternalId(), response != null ? response.getDocumentId() : "null");
